@@ -1,0 +1,44 @@
+{
+  "name": "codec-brand-the-case",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CODEC — a 3D sponsorship auction for the physical panels of a travelling hardshell case.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma db push --force-reset && npm run db:seed",
+    "db:studio": "prisma studio",
+    "setup": "prisma generate && prisma db push && npm run db:seed",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "@react-three/drei": "^10.0.4",
+    "@react-three/fiber": "^9.0.4",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "stripe": "^17.5.0",
+    "three": "^0.173.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@types/three": "^0.173.0",
+    "prisma": "^6.2.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}

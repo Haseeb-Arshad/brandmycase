@@ -1,0 +1,41 @@
+// CODEC — data model
+// The 20 panels are physical hardware: they are fixed, versioned config and
+// live in src/data/placements.ts, not in the database. The database owns only
+// the things that actually change — bids and their payment state.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A single bid on a single panel.
+/// SQLite has no native enum, so `status` is a checked string. Allowed values:
+///   PENDING       bid recorded, deposit not yet captured
+///   DEPOSIT_PAID  deposit captured; this bid is live in the auction
+///   OUTBID        a higher DEPOSIT_PAID bid exists on the same panel
+///   WON           auction closed in this bid's favour
+///   REFUNDED      deposit returned (lost the auction, or withdrawn)
+///   REJECTED      brand declined by the operator; deposit returned in full
+model Bid {
+  id              String   @id @default(cuid())
+  placementId     String
+  company         String
+  contactEmail    String
+  websiteUrl      String?
+  message         String?
+  amountUsd       Int
+  depositUsd      Int
+  status          String   @default("PENDING")
+  paymentProvider String   @default("mock")
+  paymentRef      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([placementId])
+  @@index([placementId, amountUsd])
+  @@index([status])
+}
