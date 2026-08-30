@@ -28,7 +28,7 @@ difference in `POST /api/bids` is three lines:
 if (session.mode === "mock") {
   await settleDeposit(bid.id, session.reference);   // no webhook is coming
 } else {
-  await prisma.bid.update({ where: { id: bid.id }, data: { paymentRef: session.reference } });
+  await supabase.from("bids").update({ payment_ref: session.reference }).eq("id", bid.id);
 }
 ```
 
@@ -93,8 +93,9 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 Card `4242 4242 4242 4242`, any future expiry, any CVC.
 
 **4. Verify the round trip.** Place a bid, complete checkout, and confirm the
-bid moved from `PENDING` to `DEPOSIT_PAID` (`npm run db:studio`). If it stayed
-`PENDING`, the webhook is not arriving — check the signature secret first.
+bid moved from `PENDING` to `DEPOSIT_PAID` (inspect the `public.bids` row in
+Supabase). If it stayed `PENDING`, the webhook is not arriving — check the
+signature secret first.
 
 ## Security posture
 

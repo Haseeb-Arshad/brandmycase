@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { settleDeposit } from "@/lib/auction";
-import { prisma } from "@/lib/db";
+import { getSupabaseAdmin } from "@/lib/supabase";
 
 /**
  * POST /api/webhooks/stripe
@@ -68,7 +68,12 @@ export async function POST(request: NextRequest) {
       if (bidId) {
         // The bidder abandoned checkout. Drop the pending claim so the panel's
         // minimum is not held up by a bid nobody paid for.
-        await prisma.bid.deleteMany({ where: { id: bidId, status: "PENDING" } });
+        const { error } = await getSupabaseAdmin()
+          .from("bids")
+          .delete()
+          .eq("id", bidId)
+          .eq("status", "PENDING");
+        if (error) throw error;
       }
       break;
     }
@@ -77,10 +82,11 @@ export async function POST(request: NextRequest) {
       const charge = event.data.object;
       const bidId = charge.metadata?.bidId;
       if (bidId) {
-        await prisma.bid.updateMany({
-          where: { id: bidId },
-          data: { status: "REFUNDED" },
-        });
+        const { error } = await getSupabaseAdmin()
+          .from("bids")
+          .update({ status: "REFUNDED" })
+          .eq("id", bidId);
+        if (error) throw error;
       }
       break;
     }

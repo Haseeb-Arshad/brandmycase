@@ -2,26 +2,23 @@
 
 ## One table
 
-```prisma
-model Bid {
-  id              String   @id @default(cuid())
-  placementId     String   // "01".."20" — validated against PLACEMENTS, not a FK
-  company         String
-  contactEmail    String
-  websiteUrl      String?
-  message         String?
-  amountUsd       Int      // whole US dollars, never cents, never a float
-  depositUsd      Int
-  status          String   @default("PENDING")
-  paymentProvider String   @default("mock")   // "stripe" | "mock"
-  paymentRef      String?  // Stripe session id, or a mock reference
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([placementId])
-  @@index([placementId, amountUsd])
-  @@index([status])
-}
+```sql
+-- Full source: supabase/migrations/20260831000000_create_bids.sql
+create table public.bids (
+  id text primary key,
+  placement_id text not null,
+  company text not null,
+  contact_email text not null,
+  website_url text,
+  message text,
+  amount_usd integer not null,
+  deposit_usd integer not null,
+  status text not null default 'PENDING',
+  payment_provider text not null default 'mock',
+  payment_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
 ```
 
 That is the entire schema. Panels are typed constants in
@@ -41,7 +38,7 @@ every comparison in the auction exact.
 
 ## Bid lifecycle
 
-SQLite has no native enum, so `status` is a checked string. These are the only
+Postgres uses a checked string rather than an enum, so `status` remains portable. These are the only
 legal values and transitions:
 
 ```
@@ -97,24 +94,9 @@ on a panel is `bids.length`, not a number someone incremented.
 `settleDeposit()` promotes a bid and demotes whoever it beat, atomically:
 
 ```ts
-await prisma.$transaction(async (tx) => {
-  const bid = await tx.bid.findUnique({ where: { id: bidId } });
-  if (!bid || bid.status !== "PENDING") return;      // idempotency guard
-
-  await tx.bid.updateMany({
-    where: {
-      placementId: bid.placementId,
-      status: { in: LIVE_BID_STATUSES },
-      amountUsd: { lte: bid.amountUsd },
-      id: { not: bid.id },
-    },
-    data: { status: "OUTBID" },
-  });
-
-  await tx.bid.update({
-    where: { id: bid.id },
-    data: { status: "DEPOSIT_PAID", paymentRef },
-  });
+await supabase.rpc("settle_bid", {
+  p_bid_id: bidId,
+  p_payment_ref: paymentRef,
 });
 ```
 
@@ -147,16 +129,10 @@ never reach `DEPOSIT_PAID`, this does not occur in practice.
 
 ## Seeding
 
-`prisma/seed.ts` writes a plausible mid-campaign board: thirteen panels taken,
-seven open, with real losing-bid rows behind each leader so bid counts are
-genuine. Every sponsor name is fictional — see the warning in the
-[README](../README.md).
-
-```bash
-npm run db:seed     # seed on top of a wipe
-npm run db:reset    # force-reset the schema, then seed
-npm run db:studio   # inspect and hand-edit bids
-```
+There is no seed script. The retired local fixture contained fictional sponsor
+names and was removed so a fresh setup cannot publish invented auction data.
+Use the Supabase dashboard or an authorized migration/operations path to
+inspect real rows; do not add demo sponsors to production.
 
 ---
 

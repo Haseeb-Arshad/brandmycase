@@ -7,7 +7,7 @@
 | Framework | Next.js 15, App Router | Server components mean the board is rendered with real bids in the first paint |
 | Language | TypeScript, `strict` | The panel map is the contract; types enforce it |
 | 3D | three.js + React Three Fiber 9 + drei 10 | R3F 9 pairs with React 19 |
-| Database | Prisma 6 + SQLite (dev) | Zero-setup locally; swap the datasource for Postgres in production |
+| Database | Supabase Postgres via `@supabase/server` | Server-only client; live bids stay in the hosted database |
 | Payments | Stripe Checkout, with a mock backend | The repo runs end to end with no Stripe account |
 | Validation | Zod | One schema per endpoint, parsed before anything touches the database |
 | Styling | One hand-written CSS file | The design system is ~40 tokens and ~60 components; a utility framework would be more machinery than the problem needs |
@@ -53,7 +53,7 @@ Browser                    POST /api/bids
                              │
                              ├─ 3. amount < minimumBidUsd ?           409 with the new floor
                              │
-                             ├─ 4. prisma.bid.create({ PENDING })     holds no claim yet
+                             ├─ 4. Supabase bids.insert({ PENDING })   holds no claim yet
                              │
                              ├─ 5. createDepositSession(...)
                              │       ├── live: Stripe Checkout Session

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { getSupabaseAdmin } from "@/lib/supabase";
 import { bidSchema, fieldErrors } from "@/lib/validation";
 import { getPanelState, settleDeposit } from "@/lib/auction";
 import { depositFor, formatUsd } from "@/lib/money";
@@ -58,20 +58,32 @@ export async function POST(request: NextRequest) {
   }
 
   const depositUsd = depositFor(input.amountUsd);
+  const bidId = crypto.randomUUID();
 
-  const bid = await prisma.bid.create({
-    data: {
-      placementId: input.placementId,
+  const { data: bid, error: insertError } = await getSupabaseAdmin()
+    .from("bids")
+    .insert({
+      id: bidId,
+      placement_id: input.placementId,
       company: input.company,
-      contactEmail: input.contactEmail,
-      websiteUrl: input.websiteUrl ?? null,
+      contact_email: input.contactEmail,
+      website_url: input.websiteUrl ?? null,
       message: input.message ?? null,
-      amountUsd: input.amountUsd,
-      depositUsd,
+      amount_usd: input.amountUsd,
+      deposit_usd: depositUsd,
       status: "PENDING",
-      paymentProvider: PAYMENTS_MODE === "live" ? "stripe" : "mock",
-    },
-  });
+      payment_provider: PAYMENTS_MODE === "live" ? "stripe" : "mock",
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !bid) {
+    console.error("[bids] Supabase insert failed", insertError);
+    return NextResponse.json(
+      { error: "Could not record your bid. Please try again." },
+      { status: 503 },
+    );
+  }
 
   let session;
   try {
@@ -86,7 +98,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     // Never leave an orphan PENDING row behind a failed checkout.
-    await prisma.bid.delete({ where: { id: bid.id } });
+    await getSupabaseAdmin().from("bids").delete().eq("id", bid.id);
     console.error("[bids] checkout failed", error);
     return NextResponse.json(
       { error: "Could not open the payment step. Please try again." },
@@ -99,10 +111,11 @@ export async function POST(request: NextRequest) {
   if (session.mode === "mock") {
     await settleDeposit(bid.id, session.reference);
   } else {
-    await prisma.bid.update({
-      where: { id: bid.id },
-      data: { paymentRef: session.reference },
-    });
+    const { error } = await getSupabaseAdmin()
+      .from("bids")
+      .update({ payment_ref: session.reference })
+      .eq("id", bid.id);
+    if (error) throw error;
   }
 
   return NextResponse.json(

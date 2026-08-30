@@ -16,7 +16,7 @@ and blue for the primary action.
 ```bash
 npm install
 cp .env.example .env      # every value already has a working local default
-npm run setup             # prisma generate + db push + seed
+npm run setup             # apply the Supabase migration
 npm run dev               # http://localhost:3000
 ```
 
@@ -27,12 +27,11 @@ locally. See [docs/06-payments.md](docs/06-payments.md) to switch it to live.
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Dev server with hot reload |
-| `npm run build` | Production build (runs `prisma generate` first) |
+| `npm run build` | Production build |
 | `npm start` | Serve the production build |
 | `npm test` | Run the Vitest suite |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run db:reset` | Wipe and reseed the auction |
-| `npm run db:studio` | Prisma Studio, to inspect bids |
+| `npm run db:migrate` | Apply the Supabase schema migration |
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -70,10 +69,10 @@ src/
     money.ts                  deposits, minimum increments, formatting
     stripe.ts                 live/mock payment backends behind one function
     validation.ts             Zod request schemas
-    db.ts                     PrismaClient singleton
-prisma/
-  schema.prisma               one model: Bid
-  seed.ts                     a plausible mid-campaign board (fictional brands)
+    db.ts                     live-bid status constants
+    supabase.ts               server-only Supabase client and database types
+supabase/
+  migrations/                 canonical Supabase schema and settlement RPC
 docs/                         the documentation set — start at 01-overview.md
 tests/                        Vitest: panel geometry and money rules
 ```
@@ -92,7 +91,7 @@ collision between panels 07 and 08 during the build.
 
 **2. Panels are hardware, bids are data.** The twenty panels are fixed physical
 areas on a real shell, so they are typed constants, not database rows. The
-database holds exactly one model — `Bid` — and the "current state" of a panel is
+Supabase holds exactly one table — `bids` — and the "current state" of a panel is
 derived: the highest bid whose deposit has settled. See
 [docs/03-data-model.md](docs/03-data-model.md).
 
@@ -111,6 +110,7 @@ derived: the highest bid whose deposit has settled. See
 | [07 — Design system](docs/07-design-system.md) | Tokens, type scale, component patterns |
 | [08 — Deployment](docs/08-deployment.md) | Postgres, env vars, hosting, checklist |
 | [09 — Sponsor kit](docs/09-sponsor-kit.md) | Artwork spec and the full panel table |
+| [10 — Supabase migration](docs/10-supabase-migration.md) | Runtime database boundary and rollout |
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -118,11 +118,9 @@ derived: the highest bid whose deposit has settled. See
 
 Two things in this repo are placeholders and **must** be dealt with first.
 
-**The seeded sponsors are invented.** Every company on the board
-(Northbeam Labs, Halcyon Compute, and the rest) is fictional. They exist so the
-site has something to render in development. Run `npm run db:reset` against an
-emptied `DEMO_BIDS` array, or replace them with brands that have actually
-signed. Never ship an invented company as a real sponsor.
+**The old seeded sponsors were invented and are gone.** The application no
+longer seeds local SQLite data. The board is empty until real bid rows are
+written to Supabase; never add invented companies as real sponsors.
 
 **There is no affiliation with anyone.** The copy throughout is written as
 attendance, not endorsement: the case *goes to* these events the way any

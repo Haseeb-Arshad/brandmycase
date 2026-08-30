@@ -1,4 +1,5 @@
-import { prisma, LIVE_BID_STATUSES } from "@/lib/db";
+import { LIVE_BID_STATUSES } from "@/lib/db";
+import { getSupabaseAdmin, type BidRow } from "@/lib/supabase";
 import {
   PLACEMENTS,
   GOAL_USD,
@@ -53,6 +54,18 @@ export interface RecentBid {
   createdAt: string;
 }
 
+const BID_COLUMNS =
+  "id, placement_id, company, contact_email, website_url, message, amount_usd, deposit_usd, status, payment_provider, payment_ref, created_at, updated_at";
+
+function requireRows<T>(
+  data: T[] | null,
+  error: { message: string } | null,
+  operation: string,
+): T[] {
+  if (error) throw new Error(`Supabase ${operation} failed: ${error.message}`);
+  return data ?? [];
+}
+
 /**
  * Build the whole board in two queries rather than one per panel.
  *
@@ -61,30 +74,33 @@ export interface RecentBid {
  * which is what the 3D scene indexes against.
  */
 export async function getAuctionBoard(): Promise<AuctionBoard> {
-  const liveBids = await prisma.bid.findMany({
-    where: { status: { in: [...LIVE_BID_STATUSES] } },
-    orderBy: { amountUsd: "desc" },
-  });
+  const supabase = getSupabaseAdmin();
+  const liveResult = await supabase
+    .from("bids")
+    .select(BID_COLUMNS)
+    .in("status", [...LIVE_BID_STATUSES])
+    .order("amount_usd", { ascending: false });
+  const liveBids = requireRows(liveResult.data as BidRow[] | null, liveResult.error, "live board read");
 
   const byPlacement = new Map<string, typeof liveBids>();
   for (const bid of liveBids) {
-    const list = byPlacement.get(bid.placementId);
+    const list = byPlacement.get(bid.placement_id);
     if (list) list.push(bid);
-    else byPlacement.set(bid.placementId, [bid]);
+    else byPlacement.set(bid.placement_id, [bid]);
   }
 
   const panels: PanelState[] = PLACEMENTS.map((placement) => {
     // Already sorted desc by the query, so index 0 is the leader.
     const bids = byPlacement.get(placement.id) ?? [];
     const leader = bids[0] ?? null;
-    const currentBidUsd = leader?.amountUsd ?? null;
+    const currentBidUsd = leader?.amount_usd ?? null;
     const minimumBidUsd = minimumNextBid(placement.openingBidUsd, currentBidUsd);
 
     return {
       ...placement,
       currentBidUsd,
       sponsor: leader?.company ?? null,
-      sponsorUrl: leader?.websiteUrl ?? null,
+      sponsorUrl: leader?.website_url ?? null,
       bidCount: bids.length,
       minimumBidUsd,
       minimumDepositUsd: depositFor(minimumBidUsd),
@@ -95,18 +111,20 @@ export async function getAuctionBoard(): Promise<AuctionBoard> {
   const raisedUsd = panels.reduce((sum, p) => sum + (p.currentBidUsd ?? 0), 0);
   const panelsTaken = panels.filter((p) => p.taken).length;
 
-  const recentRows = await prisma.bid.findMany({
-    where: { status: { in: [...LIVE_BID_STATUSES] } },
-    orderBy: { createdAt: "desc" },
-    take: 8,
-  });
+  const recentResult = await supabase
+    .from("bids")
+    .select(BID_COLUMNS)
+    .in("status", [...LIVE_BID_STATUSES])
+    .order("created_at", { ascending: false })
+    .limit(8);
+  const recentRows = requireRows(recentResult.data as BidRow[] | null, recentResult.error, "recent board read");
 
   const recent: RecentBid[] = recentRows.map((bid) => ({
     company: bid.company,
-    placementId: bid.placementId,
-    placementName: getPlacement(bid.placementId)?.name ?? bid.placementId,
-    amountUsd: bid.amountUsd,
-    createdAt: bid.createdAt.toISOString(),
+    placementId: bid.placement_id,
+    placementName: getPlacement(bid.placement_id)?.name ?? bid.placement_id,
+    amountUsd: bid.amount_usd,
+    createdAt: new Date(bid.created_at).toISOString(),
   }));
 
   return {
@@ -129,20 +147,24 @@ export async function getPanelState(placementId: string): Promise<PanelState | n
   const placement = getPlacement(placementId);
   if (!placement) return null;
 
-  const bids = await prisma.bid.findMany({
-    where: { placementId, status: { in: [...LIVE_BID_STATUSES] } },
-    orderBy: { amountUsd: "desc" },
-  });
+  const supabase = getSupabaseAdmin();
+  const result = await supabase
+    .from("bids")
+    .select(BID_COLUMNS)
+    .eq("placement_id", placementId)
+    .in("status", [...LIVE_BID_STATUSES])
+    .order("amount_usd", { ascending: false });
+  const bids = requireRows(result.data as BidRow[] | null, result.error, "panel state read");
 
   const leader = bids[0] ?? null;
-  const currentBidUsd = leader?.amountUsd ?? null;
+  const currentBidUsd = leader?.amount_usd ?? null;
   const minimumBidUsd = minimumNextBid(placement.openingBidUsd, currentBidUsd);
 
   return {
     ...placement,
     currentBidUsd,
     sponsor: leader?.company ?? null,
-    sponsorUrl: leader?.websiteUrl ?? null,
+    sponsorUrl: leader?.website_url ?? null,
     bidCount: bids.length,
     minimumBidUsd,
     minimumDepositUsd: depositFor(minimumBidUsd),
@@ -158,23 +180,9 @@ export async function getPanelState(placementId: string): Promise<PanelState | n
  * briefly show two live leaders on one panel.
  */
 export async function settleDeposit(bidId: string, paymentRef: string): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    const bid = await tx.bid.findUnique({ where: { id: bidId } });
-    if (!bid || bid.status !== "PENDING") return;
-
-    await tx.bid.updateMany({
-      where: {
-        placementId: bid.placementId,
-        status: { in: [...LIVE_BID_STATUSES] },
-        amountUsd: { lte: bid.amountUsd },
-        id: { not: bid.id },
-      },
-      data: { status: "OUTBID" },
-    });
-
-    await tx.bid.update({
-      where: { id: bid.id },
-      data: { status: "DEPOSIT_PAID", paymentRef },
-    });
+  const { error } = await getSupabaseAdmin().rpc("settle_bid", {
+    p_bid_id: bidId,
+    p_payment_ref: paymentRef,
   });
+  if (error) throw new Error(`Supabase bid settlement failed: ${error.message}`);
 }

@@ -82,7 +82,7 @@ the entire auction; polling it is trivial to add if the pace ever justifies it.
 
 **No admin UI.** Accepting a brand, declining one, or closing the auction are
 rare, high-consequence actions done against the database directly
-(`npm run db:studio`). A half-built admin panel is a liability; the bid
+through the database operations workflow). A half-built admin panel is a liability; the bid
 lifecycle in [03 — Data model](03-data-model.md) documents exactly which status
 transitions are legal.
 
@@ -99,7 +99,7 @@ the value of that collapses the moment the offer looks like it is claiming an
 affiliation it does not have. Keep the framing when editing
 `src/data/site.ts`.
 
-Similarly, every seeded sponsor in `prisma/seed.ts` is fictional and labelled as
+Similarly, any seeded sponsor from the retired local fixture was fictional and labelled as
 such. See the warning at the end of the [README](../README.md).
 
 ---

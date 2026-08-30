@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { getSupabaseAdmin, type BidRow } from "@/lib/supabase";
 import { getPlacement } from "@/data/placements";
 import { formatUsd } from "@/lib/money";
 import { Nav } from "@/components/Nav";
@@ -20,8 +20,21 @@ export default async function SuccessPage({
   searchParams: Promise<{ bid?: string }>;
 }) {
   const { bid: bidId } = await searchParams;
-  const bid = bidId ? await prisma.bid.findUnique({ where: { id: bidId } }) : null;
-  const panel = bid ? getPlacement(bid.placementId) : null;
+  const bidResult = bidId
+    ? await getSupabaseAdmin()
+        .from("bids")
+        .select("company, placement_id, amount_usd, deposit_usd, contact_email")
+        .eq("id", bidId)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (bidResult.error) {
+    console.error("[success] Supabase bid read failed", bidResult.error);
+  }
+  const bid = bidResult.data as Pick<
+    BidRow,
+    "company" | "placement_id" | "amount_usd" | "deposit_usd" | "contact_email"
+  > | null;
+  const panel = bid ? getPlacement(bid.placement_id) : null;
 
   return (
     <>
@@ -37,10 +50,10 @@ export default async function SuccessPage({
 
           {bid && panel ? (
             <p className="lede" style={{ marginTop: 18 }}>
-              {bid.company} — {formatUsd(bid.amountUsd)} on panel {panel.id},{" "}
+              {bid.company} — {formatUsd(bid.amount_usd)} on panel {panel.id},{" "}
               {panel.name} ({panel.sizeLabel}). We&rsquo;ve taken a{" "}
-              {formatUsd(bid.depositUsd)} deposit and sent a confirmation to{" "}
-              {bid.contactEmail}. You&rsquo;ll hear from us within one working day
+              {formatUsd(bid.deposit_usd)} deposit and sent a confirmation to{" "}
+              {bid.contact_email}. You&rsquo;ll hear from us within one working day
               about artwork and proofs.
             </p>
           ) : (
