@@ -20,9 +20,10 @@ npm run setup             # apply the Supabase migration
 npm run dev               # http://localhost:3000
 ```
 
-That is the whole setup. **No Stripe account is needed** — with the keys blank
-the payment layer runs in `mock` mode and the full bid flow works end to end
-locally. See [docs/06-payments.md](docs/06-payments.md) to switch it to live.
+That is the whole setup. **No Safepay account is needed for local development**
+— with the keys blank the payment layer runs in `mock` mode and the full bid
+flow works end to end locally. See [docs/06-payments.md](docs/06-payments.md)
+to connect Safepay after onboarding.
 
 | Command | What it does |
 | --- | --- |
@@ -43,10 +44,10 @@ src/
     page.tsx                  server component; reads the board, renders the page
     layout.tsx                Inter via next/font, metadata
     globals.css               the whole design system, one file, no framework
-    success/page.tsx          Stripe Checkout return page
+    success/page.tsx          Safepay Hosted Checkout return page
     api/board/route.ts        GET  the whole auction in one payload
     api/bids/route.ts         POST place a bid, open a deposit checkout
-    api/webhooks/stripe/      POST the only path that can make a bid live
+    api/webhooks/safepay/     POST the only path that can make a bid live
   components/
     AuctionProvider.tsx       shared board state + the modal host
     CaseHero.tsx              centred hero: stats, headline, funding, the case
@@ -67,7 +68,9 @@ src/
   lib/
     auction.ts                joins static panels to live bids
     money.ts                  deposits, minimum increments, formatting
-    stripe.ts                 live/mock payment backends behind one function
+    payments.ts               Safepay live/mock payment backend
+    payment-events.ts         idempotent webhook ledger
+    refunds.ts                durable deposit-refund processing
     validation.ts             Zod request schemas
     db.ts                     live-bid status constants
     supabase.ts               server-only Supabase client and database types
@@ -91,8 +94,8 @@ collision between panels 07 and 08 during the build.
 
 **2. Panels are hardware, bids are data.** The twenty panels are fixed physical
 areas on a real shell, so they are typed constants, not database rows. The
-Supabase holds exactly one table — `bids` — and the "current state" of a panel is
-derived: the highest bid whose deposit has settled. See
+Supabase holds bids plus a private payment-webhook ledger, and the "current
+state" of a panel is derived: the highest bid whose deposit has settled. See
 [docs/03-data-model.md](docs/03-data-model.md).
 
 <!-- ------------------------------------------------------------------ -->
@@ -103,7 +106,7 @@ derived: the highest bid whose deposit has settled. See
 | --- | --- |
 | [01 — Overview](docs/01-overview.md) | What the product is and the rules of the auction |
 | [02 — Architecture](docs/02-architecture.md) | Stack, rendering strategy, request flow |
-| [03 — Data model](docs/03-data-model.md) | Why there is only one table, and the bid lifecycle |
+| [03 — Data model](docs/03-data-model.md) | Bid, payment, refund, and webhook state |
 | [04 — API reference](docs/04-api.md) | Every endpoint, with request and response shapes |
 | [05 — The 3D case](docs/05-the-3d-case.md) | Geometry, the coordinate system, the rotation model |
 | [06 — Payments](docs/06-payments.md) | Deposits, mock vs live, webhooks, going live |
@@ -111,6 +114,7 @@ derived: the highest bid whose deposit has settled. See
 | [08 — Deployment](docs/08-deployment.md) | Postgres, env vars, hosting, checklist |
 | [09 — Sponsor kit](docs/09-sponsor-kit.md) | Artwork spec and the full panel table |
 | [10 — Supabase migration](docs/10-supabase-migration.md) | Runtime database boundary and rollout |
+| [11 — Safepay integration plan](docs/11-safepay-integration-plan.md) | Provider setup, webhook, refund, and live gates |
 
 <!-- ------------------------------------------------------------------ -->
 

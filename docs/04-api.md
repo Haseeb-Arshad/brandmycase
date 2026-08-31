@@ -99,7 +99,7 @@ Place a bid on a panel and open a deposit checkout.
 }
 ```
 
-In **live** mode `redirectUrl` is a Stripe Checkout URL and the client must
+In **live** mode `redirectUrl` is a Safepay Hosted Checkout URL and the client must
 navigate to it; the bid is still `PENDING` and becomes live only when the
 webhook fires.
 
@@ -141,8 +141,10 @@ price sent by the client. The modal updates the displayed minimum from
 { "error": "Could not open the payment step. Please try again." }
 ```
 
-The pending bid row is deleted before this is returned, so a failed checkout
-never leaves an orphan holding up a panel's minimum.
+In mock or misconfigured mode the pending bid row is deleted before this is
+returned. In live mode it is retained if a Safepay tracker may already exist,
+so a later webhook can reconcile it by bid metadata; `PENDING` never holds a
+panel on the public board.
 
 ### Other codes
 
@@ -153,32 +155,33 @@ never leaves an orphan holding up a panel's minimum.
 
 ---
 
-## `POST /api/webhooks/stripe`
+## `POST /api/webhooks/safepay`
 
 The only path that can promote a bid to live in production. Runs on the Node
 runtime and reads the raw body — signature verification needs the exact bytes
-Stripe sent, so this route must not pass through any body parser.
+Safepay sent, so this route must not pass through any body parser.
 
 ### Headers
 
-`stripe-signature` is required and verified against `STRIPE_WEBHOOK_SECRET`
-before a single field of the payload is read. An unsigned request must never be
-able to hand somebody a panel.
+`X-SFPY-SIGNATURE` is required and verified with HMAC-SHA512 against
+`SAFEPAY_WEBHOOK_SECRET` before a single field of the payload is read. An
+unsigned request must never be able to hand somebody a panel.
 
 ### Events handled
 
 | Event | Effect |
 | --- | --- |
-| `checkout.session.completed` | `settleDeposit(bidId, sessionId)` — marks the bid `DEPOSIT_PAID` and every lower live bid on that panel `OUTBID`, in one transaction |
-| `checkout.session.expired` | Deletes the bid if it is still `PENDING`, so an abandoned checkout does not hold up the panel's minimum |
-| `charge.refunded` | Marks the bid `REFUNDED` |
+| `payment.succeeded` | Validates tracker, metadata, USD amount, and currency; marks the bid `DEPOSIT_PAID`, demotes lower live bids, and starts their refunds |
+| `payment.failed` | Records the failed attempt and leaves the pending bid available for checkout retry |
+| `payment.refunded` | Confirms the refund amount and marks the refund state `SUCCEEDED` or `PARTIAL` |
+| `authorization.succeeded`, `authorization.reversed`, `void.succeeded` | Records and acknowledges the event |
 
 Everything else is acknowledged and ignored.
 
-The bid id travels in `client_reference_id` **and** in `metadata.bidId`, so the
-handler can settle exactly one bid without trusting anything in a URL.
-`settleDeposit()` is idempotent, which matters because Stripe delivers at least
-once.
+The bid id travels in `metadata.bid_id` and `metadata.order_id`, and the
+Safepay tracker is stored on the bid. The handler can settle exactly one bid and
+never trusts a redirect. `settleDeposit()` and the webhook ledger are
+idempotent, which matters because Safepay retries events.
 
 ### Responses
 
@@ -186,13 +189,15 @@ once.
 | --- | --- |
 | `200` | `{ "received": true }` |
 | `400` | Missing or invalid signature |
-| `500` | `STRIPE_WEBHOOK_SECRET` not configured |
-| `503` | Stripe not configured — the app is in mock mode |
+| `500` | Supabase ledger or webhook business logic failed; Safepay should retry |
+| `503` | `SAFEPAY_WEBHOOK_SECRET` is not configured |
 
 ### Local testing
 
 ```bash
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
+# Use a public HTTPS tunnel for the local app, then add this URL in the
+# Safepay sandbox dashboard under Developers > Endpoints.
+https://your-public-domain.example/api/webhooks/safepay
 ```
 
 ---

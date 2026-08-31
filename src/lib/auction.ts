@@ -55,7 +55,7 @@ export interface RecentBid {
 }
 
 const BID_COLUMNS =
-  "id, placement_id, company, contact_email, website_url, message, amount_usd, deposit_usd, status, payment_provider, payment_ref, created_at, updated_at";
+  "id, placement_id, company, contact_email, website_url, message, amount_usd, deposit_usd, status, payment_provider, payment_ref, payment_currency, payment_amount_minor, payment_captured_at, refund_status, refund_ref, refund_amount_minor, refund_requested_at, refunded_at, refund_error, created_at, updated_at";
 
 function requireRows<T>(
   data: T[] | null,
@@ -179,10 +179,31 @@ export async function getPanelState(placementId: string): Promise<PanelState | n
  * previous leader being marked OUTBID in the same commit, or the board would
  * briefly show two live leaders on one panel.
  */
-export async function settleDeposit(bidId: string, paymentRef: string): Promise<void> {
-  const { error } = await getSupabaseAdmin().rpc("settle_bid", {
+export interface SettlementResult {
+  outbidBids: Array<{ id: string; paymentRef: string | null }>;
+}
+
+export async function settleDeposit(
+  bidId: string,
+  paymentRef: string,
+): Promise<SettlementResult> {
+  const { data, error } = await getSupabaseAdmin().rpc("settle_bid", {
     p_bid_id: bidId,
     p_payment_ref: paymentRef,
   });
   if (error) throw new Error(`Supabase bid settlement failed: ${error.message}`);
+
+  const rows = Array.isArray(data) ? data : [];
+  return {
+    outbidBids: rows.flatMap((row) => {
+      if (!row || typeof row !== "object") return [];
+      const value = row as Record<string, unknown>;
+      return typeof value.id === "string"
+        ? [{
+            id: value.id,
+            paymentRef: typeof value.paymentRef === "string" ? value.paymentRef : null,
+          }]
+        : [];
+    }),
+  };
 }

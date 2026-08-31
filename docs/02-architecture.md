@@ -8,7 +8,7 @@
 | Language | TypeScript, `strict` | The panel map is the contract; types enforce it |
 | 3D | three.js + React Three Fiber 9 + drei 10 | R3F 9 pairs with React 19 |
 | Database | Supabase Postgres via `@supabase/server` | Server-only client; live bids stay in the hosted database |
-| Payments | Stripe Checkout, with a mock backend | The repo runs end to end with no Stripe account |
+| Payments | Safepay Hosted Checkout, with a mock backend | Pakistan-compatible provider boundary with signed webhooks and refunds |
 | Validation | Zod | One schema per endpoint, parsed before anything touches the database |
 | Styling | One hand-written CSS file | The design system is ~40 tokens and ~60 components; a utility framework would be more machinery than the problem needs |
 | Tests | Vitest | Geometry and money rules |
@@ -56,14 +56,14 @@ Browser                    POST /api/bids
                              ├─ 4. Supabase bids.insert({ PENDING })   holds no claim yet
                              │
                              ├─ 5. createDepositSession(...)
-                             │       ├── live: Stripe Checkout Session
+                             │       ├── live: Safepay Hosted Checkout tracker
                              │       └── mock: local reference
                              │
-                             │      on failure: delete the bid, 502
-                             │      (never leave an orphan PENDING row)
+                             │      on mock failure: delete the bid, 502
+                             │      live failure: retain it for webhook reconciliation
                              │
                              └─ 6. mock  → settleDeposit() inline
-                                   live  → store session id, wait for the webhook
+                                   live  → store tracker, wait for the Safepay webhook
 
                      201 { bidId, depositUsd, mode, redirectUrl }
 ```
@@ -73,7 +73,7 @@ the new bid is marked `DEPOSIT_PAID` and every lower live bid on that panel is
 marked `OUTBID` in the same commit. Without the transaction the board could
 briefly show two live leaders on one panel.
 
-In live mode the only caller of `settleDeposit()` is the Stripe webhook, after
+In live mode the only caller of `settleDeposit()` is the Safepay webhook, after
 signature verification. Nothing in a URL can promote a bid.
 
 ## Request flow: reading the board
@@ -115,7 +115,7 @@ the API boundary for free.
   silently accepting a losing bid.
 - **502** — the payment provider could not open a session. The pending bid is
   deleted first.
-- **400 / 503** on the webhook — bad signature, or Stripe not configured.
+- **400 / 503** on the webhook — bad signature, or Safepay not configured.
 
 A failed board refresh is deliberately swallowed: the board on screen is still
 valid, just seconds stale, and an error toast would be noise.

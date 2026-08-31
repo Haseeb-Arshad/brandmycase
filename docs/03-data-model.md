@@ -1,6 +1,6 @@
 # 03 — Data model
 
-## One table
+## Auction and payment state
 
 ```sql
 -- Full source: supabase/migrations/20260831000000_create_bids.sql
@@ -16,12 +16,22 @@ create table public.bids (
   status text not null default 'PENDING',
   payment_provider text not null default 'mock',
   payment_ref text,
+  payment_currency text not null default 'USD',
+  payment_amount_minor integer,
+  payment_captured_at timestamptz,
+  refund_status text not null default 'NOT_REQUESTED',
+  refund_ref text,
+  refund_amount_minor integer not null default 0,
+  refund_requested_at timestamptz,
+  refunded_at timestamptz,
+  refund_error text,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
 ```
 
-That is the entire schema. Panels are typed constants in
+The private `payment_webhook_events` table stores provider event ids, payloads,
+processing status, and errors for idempotent webhook handling. Panels are typed constants in
 `src/data/placements.ts` — see [02 — Architecture](02-architecture.md#why-panels-are-not-in-the-database).
 
 `placementId` is intentionally not a foreign key: there is no panel table to
@@ -32,8 +42,8 @@ any write.
 ## Money is always integer dollars
 
 Every amount in the system is a whole-dollar `Int`. There are no floats and no
-cents anywhere except one function, `toStripeAmount()`, which converts at the
-Stripe boundary. Bids on physical panels are never fractional, and integers make
+cents anywhere except one function, `toPaymentAmount()`, which converts at the
+Safepay boundary. Bids on physical panels are never fractional, and integers make
 every comparison in the auction exact.
 
 ## Bid lifecycle
@@ -57,7 +67,7 @@ legal values and transitions:
  └──────┬───────┘  live. This is the bid the board shows.
         │
         ├──── a higher bid settles ────►  ┌────────┐
-        │                                 │ OUTBID │ → REFUNDED
+        │                                 │ OUTBID │ → refund_status SUCCEEDED
         │                                 └────────┘
         │
         ├──── operator declines brand ──►  REJECTED  (deposit returned in full)
@@ -103,7 +113,7 @@ await supabase.rpc("settle_bid", {
 Two properties worth noting:
 
 **It is idempotent.** The `status !== "PENDING"` guard means calling it twice is
-a no-op. Stripe delivers webhooks at least once, so this matters in production.
+a no-op. Safepay retries webhooks, so this matters in production.
 
 **It is atomic.** Marking the new leader live and the old leader outbid happen
 in one commit. Split across two statements, a reader between them would see

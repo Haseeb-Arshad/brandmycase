@@ -5,7 +5,7 @@ import { formatUsd } from "@/lib/money";
 import { Nav } from "@/components/Nav";
 
 /**
- * Where Stripe Checkout returns to.
+ * Where Safepay Hosted Checkout returns to.
  *
  * The bid may still be PENDING when the browser lands here — the webhook and
  * the redirect race, and the webhook is the one that counts. So this page never
@@ -23,7 +23,7 @@ export default async function SuccessPage({
   const bidResult = bidId
     ? await getSupabaseAdmin()
         .from("bids")
-        .select("company, placement_id, amount_usd, deposit_usd, contact_email")
+        .select("company, placement_id, amount_usd, deposit_usd, contact_email, status")
         .eq("id", bidId)
         .maybeSingle()
     : { data: null, error: null };
@@ -32,9 +32,15 @@ export default async function SuccessPage({
   }
   const bid = bidResult.data as Pick<
     BidRow,
-    "company" | "placement_id" | "amount_usd" | "deposit_usd" | "contact_email"
+    | "company"
+    | "placement_id"
+    | "amount_usd"
+    | "deposit_usd"
+    | "contact_email"
+    | "status"
   > | null;
   const panel = bid ? getPlacement(bid.placement_id) : null;
+  const depositConfirmed = bid?.status === "DEPOSIT_PAID" || bid?.status === "WON";
 
   return (
     <>
@@ -45,21 +51,33 @@ export default async function SuccessPage({
             ✓
           </span>
 
-          <p className="section-kicker">Deposit received</p>
+          <p className="section-kicker">
+            {depositConfirmed ? "Deposit received" : "Payment being confirmed"}
+          </p>
           <h1 style={{ marginTop: 12 }}>You&rsquo;re on the case.</h1>
 
           {bid && panel ? (
             <p className="lede" style={{ marginTop: 18 }}>
               {bid.company} — {formatUsd(bid.amount_usd)} on panel {panel.id},{" "}
-              {panel.name} ({panel.sizeLabel}). We&rsquo;ve taken a{" "}
-              {formatUsd(bid.deposit_usd)} deposit and sent a confirmation to{" "}
-              {bid.contact_email}. You&rsquo;ll hear from us within one working day
-              about artwork and proofs.
+              {panel.name} ({panel.sizeLabel}).{" "}
+              {depositConfirmed ? (
+                <>
+                  We&rsquo;ve confirmed your {formatUsd(bid.deposit_usd)} deposit and
+                  will use {bid.contact_email} to follow up within one working day
+                  about artwork and proofs.
+                </>
+              ) : (
+                <>
+                  We&rsquo;ve received your checkout return and are waiting for Safepay
+                  to confirm the {formatUsd(bid.deposit_usd)} deposit. We&rsquo;ll use{" "}
+                  {bid.contact_email} to follow up as soon as it is confirmed.
+                </>
+              )}
             </p>
           ) : (
             <p className="lede" style={{ marginTop: 18 }}>
-              Your deposit was received. A confirmation is on its way to the address
-              you gave, with the artwork spec for your panel.
+              Your checkout return was received. Safepay is confirming the payment,
+              and our team will follow up using the contact address you gave.
             </p>
           )}
 

@@ -10,8 +10,10 @@ describe the physical case rather than mutable auction state.
 
 ## Data boundary
 
-- `public.bids` is the canonical source for live bids, payment state, and bid
-  history.
+- `public.bids` is the canonical source for live bids, payment state, refund
+  state, and bid history.
+- `public.payment_webhook_events` is a private idempotency ledger for verified
+  Safepay events.
 - The fictional SQLite seed data is removed. No fake sponsor rows are recreated
   by setup or deployment commands.
 - `supabase/migrations/` is the schema source of truth. It includes the atomic
@@ -27,8 +29,8 @@ describe the physical case rather than mutable auction state.
    `.env` or any key values.
 3. Start the app and verify `GET /api/board` returns all 20 panels with empty
    live-bid state until real rows exist.
-4. Verify a mock bid writes to Supabase and updates the board. Use Stripe only
-   after its live keys and webhook are configured.
+4. Verify a mock bid writes to Supabase and updates the board. Use Safepay
+   sandbox keys and webhooks before production keys.
 
 The current Codex Supabase MCP connection is read-only in this task, so remote
 schema or row mutations are intentionally not performed here. The migration is

@@ -1,154 +1,147 @@
 # 06 — Payments
 
-## Two backends, one function
+## Two modes, one provider boundary
 
-Anyone who clones this repo can run the complete bid flow without a Stripe
-account. `src/lib/stripe.ts` exposes one function with two implementations
-behind it:
+`src/lib/payments.ts` exposes the auction payment contract. It uses Safepay’s
+official Node library for live hosted checkout and a deterministic local mock
+when no Safepay keys are present.
 
-```ts
-export const PAYMENTS_MODE: "live" | "mock" = secretKey ? "live" : "mock";
-
-createDepositSession(req): Promise<{
-  mode: "live" | "mock";
-  redirectUrl: string;
-  reference: string;
-}>
-```
-
-| Mode | Trigger | Behaviour |
+| Mode | Configuration | Behaviour |
 | --- | --- | --- |
-| `mock` | `STRIPE_SECRET_KEY` blank | Mints a local `mock_dep_<bidId>` reference. Nothing leaves the machine. `POST /api/bids` settles the deposit inline, because no webhook is coming. |
-| `live` | `STRIPE_SECRET_KEY` set | Creates a real Checkout Session. The bid stays `PENDING` until the webhook fires. |
+| `mock` | All Safepay keys blank | Mints a local `mock_dep_<bidId>` reference and settles the bid inline. No money leaves the machine. |
+| `live` | Public key, private key, and webhook secret present | Creates a Safepay tracker and hosted checkout URL. The bid remains `PENDING` until a verified webhook arrives. |
+| `misconfigured` | Only some payment keys present | Refuses checkout rather than silently pretending to take a real payment. |
 
-Both return the same shape, so no route handler branches on the mode. The only
-difference in `POST /api/bids` is three lines:
-
-```ts
-if (session.mode === "mock") {
-  await settleDeposit(bid.id, session.reference);   // no webhook is coming
-} else {
-  await supabase.from("bids").update({ payment_ref: session.reference }).eq("id", bid.id);
-}
-```
-
-This means the mock path exercises the *same* transaction that production uses,
-rather than being a separate code path that can rot.
+Safepay’s hosted Express Checkout flow creates a tracker, creates a short-lived
+passport token, generates a hosted checkout URL, and redirects the customer.
+The return URL is informational; only the signed webhook can settle the bid.
 
 ## The deposit rules
 
 Defined in `src/lib/money.ts` and tested at their boundaries in
-`tests/money.test.ts`.
+`tests/money.test.ts`:
 
-```ts
+```text
 DEPOSIT_PERCENT      = 20      // env: DEPOSIT_PERCENT
 DEPOSIT_MINIMUM_USD  = 50      // env: DEPOSIT_MINIMUM_USD
 
-depositFor(amountUsd)  = max(ceil(amountUsd * 20 / 100), 50)
+depositFor(amountUsd) = max(ceil(amountUsd * 20 / 100), 50)
 ```
 
-Rounded **up**, so the deposit is never a dollar short. Floored at $50, so a
-small bid still covers card processing.
+Amounts are whole USD in the auction. `toPaymentAmount()` converts USD to the
+processor’s smallest unit exactly once at the Safepay boundary.
 
-```ts
-minimumNextBid(opening, current)
-  = current === null
-      ? opening                                    // first bidder pays asking price
-      : current + max(ceil(current * 0.05 / 100) * 100, 100)
-```
+## Environment
 
-A 5% increment rounded up to the next $100, with a $100 floor so a panel cannot
-be ratcheted a dollar at a time. Worked example: a panel at $64,500 →
-5% is $3,225 → rounds to $3,300 → the next acceptable bid is **$67,800**.
-
-`toStripeAmount()` is the single place dollars become cents.
-
-## Going live
-
-**1. Add your keys.**
-
-```bash
-STRIPE_SECRET_KEY="sk_live_…"
-STRIPE_WEBHOOK_SECRET="whsec_…"
+```dotenv
 NEXT_PUBLIC_SITE_URL="https://yourdomain.com"
+SAFEPAY_PUBLIC_KEY="sec_..."
+SAFEPAY_SECRET_KEY="..."
+SAFEPAY_WEBHOOK_SECRET="..."
+SAFEPAY_ENVIRONMENT="sandbox" # sandbox | production
+SAFEPAY_INTENT="CYBERSOURCE"  # CYBERSOURCE | MPGS
 ```
 
-The app switches to live mode on the presence of `STRIPE_SECRET_KEY` alone. No
-code change, no flag.
+The public API key identifies the merchant account. The private API secret is
+used only on the server to create trackers, passport tokens, and refunds. The
+webhook secret is used only on the server to verify `X-SFPY-SIGNATURE`. None of
+these values belongs in a `NEXT_PUBLIC_*` variable, browser code, Git, or chat.
 
-**2. Register the webhook** at `https://yourdomain.com/api/webhooks/stripe`,
-subscribed to:
+Sandbox and production credentials are different. Use the sandbox dashboard
+and test cards before applying the production keys.
 
-- `checkout.session.completed`
-- `checkout.session.expired`
-- `charge.refunded`
+## Webhook
 
-**3. Test locally against real Stripe** before deploying:
+Register this HTTPS endpoint in Safepay:
 
-```bash
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
-# use the whsec_… it prints as STRIPE_WEBHOOK_SECRET
+```text
+https://yourdomain.com/api/webhooks/safepay
 ```
 
-Card `4242 4242 4242 4242`, any future expiry, any CVC.
+Subscribe to at least:
 
-**4. Verify the round trip.** Place a bid, complete checkout, and confirm the
-bid moved from `PENDING` to `DEPOSIT_PAID` (inspect the `public.bids` row in
-Supabase). If it stayed `PENDING`, the webhook is not arriving — check the
-signature secret first.
+- `payment.succeeded`
+- `payment.failed`
+- `payment.refunded`
+- `authorization.succeeded`
+- `authorization.reversed`
+- `void.succeeded`
 
-## Security posture
+The route reads the raw request body and calculates HMAC-SHA512 with
+`SAFEPAY_WEBHOOK_SECRET`. It compares the result with the
+`X-SFPY-SIGNATURE` header before parsing or trusting the payload.
 
-**The webhook is the only path that can make a bid live.** Nothing in a URL, a
-query parameter, or a client request can promote a bid. `/success` is a
-read-only confirmation page.
+The provider event token is stored in `payment_webhook_events` with a unique
+`(provider, event_id)` key. Duplicate deliveries are acknowledged without
+repeating settlement or refund work.
 
-**The signature is verified against the raw body**, before a single field of the
-payload is read:
+For `payment.succeeded`, the server verifies:
 
-```ts
-const rawBody = await request.text();
-event = stripe.webhooks.constructEvent(rawBody, signature, secret);
-```
+1. the bid id in `metadata.bid_id` or `metadata.order_id`;
+2. the Safepay tracker matches the bid’s stored payment reference;
+3. the currency is USD; and
+4. the smallest-unit amount equals the server-calculated 20% deposit.
 
-The route sets `runtime = "nodejs"` and never parses the body first — signature
-verification needs the exact bytes Stripe sent.
-
-**The bid id travels in `client_reference_id` and `metadata.bidId`**, so the
-handler settles exactly one known bid and never trusts a redirect.
-
-**`settleDeposit()` is idempotent.** Stripe delivers at least once; the
-`status !== "PENDING"` guard makes redelivery a no-op.
-
-**The server owns the price.** `POST /api/bids` re-reads the panel's live state
-and rejects anything below the current minimum with a 409 — a client cannot send
-a stale or forged price.
-
-## The `/success` page
-
-Stripe's redirect and the webhook race, and the webhook is the one that counts.
-So `/success` deliberately **never claims the panel is won**. It confirms what
-was received and states what happens next, which is true whichever arrives
-first.
+Only then does the atomic `settle_bid` RPC mark the bid `DEPOSIT_PAID` and mark
+any lower live bid on that panel `OUTBID`.
 
 ## Refunds
 
-Refunds are issued from the Stripe dashboard. The `charge.refunded` webhook
-marks the bid `REFUNDED`.
+The settlement RPC returns the demoted bids. The server requests a full refund
+for each captured Safepay deposit and records the lifecycle on the bid:
 
-Three cases where a deposit comes back in full:
+```text
+NOT_REQUESTED → PENDING → PROCESSING → SUCCEEDED
+                                      └→ PARTIAL
+                                      └→ FAILED
+```
 
-| Case | Status | Trigger |
-| --- | --- | --- |
-| Outbid before close | `OUTBID` → `REFUNDED` | Automatic when a higher bid settles |
-| Brand declined | `REJECTED` | Operator decision, no fee |
-| Tour cancelled | `REFUNDED` | Unused months pro rata |
+Safepay’s `payment.refunded` webhook is the final confirmation. A failed
+request stays recorded with an error and is retried in a bounded batch whenever
+the next successful payment webhook is processed. The Safepay dashboard remains
+the manual fallback for operational refunds.
 
-The balance — the other 80% — is only charged once the auction closes in the
-bidder's favour and the printed proof is approved. That charge is not automated
-in this codebase; it is raised manually against the contact email on the winning
-bid.
+The current campaign rules use a captured refundable deposit rather than a
+long-lived authorization hold. Do not promise a refund window longer than
+Safepay’s documented card-refund limit without written provider confirmation.
 
----
+## Remaining balance
 
-Next: [07 — Design system](07-design-system.md)
+The final 80% is intentionally not charged from the public bid endpoint. It is
+collected after the auction closes and the sponsor approves the artwork proof.
+For the first release, send a separate Safepay hosted payment link or invoice
+to the winning sponsor. A future tokenized/off-session charge must require
+explicit customer consent, provider approval, and an authenticated operator
+workflow; it must not be an unauthenticated public URL action.
+
+## Security posture
+
+- The webhook is the only live path that promotes a bid.
+- The server recalculates the minimum bid and deposit; client amounts are never
+  trusted.
+- Raw card numbers and CVV are never handled or stored by this application.
+- Payment and webhook event references are stored for reconciliation, not card
+  credentials.
+- A partial Safepay configuration fails closed instead of entering mock mode.
+
+## Local verification
+
+Run the deterministic suite:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+```
+
+For a live-like integration test, use a Safepay sandbox account, configure the
+sandbox keys, expose the app through a public HTTPS URL, register the sandbox
+webhook endpoint, place a test bid, and verify:
+
+```text
+PENDING → DEPOSIT_PAID
+old leader → OUTBID → refund PROCESSING → SUCCEEDED
+```
+
+Local build success does not prove live account approval, international card
+acceptance, Pakistani bank settlement, or provider payout timing.

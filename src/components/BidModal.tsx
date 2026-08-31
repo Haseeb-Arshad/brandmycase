@@ -100,7 +100,7 @@ export function BidModal({ panel, onClose, onBidPlaced }: BidModalProps) {
       }
 
       if (data.mode === "live" && data.redirectUrl) {
-        // Hand off to Stripe Checkout; the webhook makes the bid live.
+        // Hand off to Safepay Hosted Checkout; the webhook makes the bid live.
         window.location.href = data.redirectUrl;
         return;
       }

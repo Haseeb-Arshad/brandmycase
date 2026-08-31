@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { bidSchema, fieldErrors } from "@/lib/validation";
 import { getPanelState, settleDeposit } from "@/lib/auction";
-import { depositFor, formatUsd } from "@/lib/money";
-import { createDepositSession, PAYMENTS_MODE } from "@/lib/stripe";
+import { depositFor, formatUsd, toPaymentAmount } from "@/lib/money";
+import { createDepositSession, PAYMENTS_MODE } from "@/lib/payments";
+import { refundOutbidBids } from "@/lib/refunds";
 
 /**
  * POST /api/bids
@@ -16,7 +17,7 @@ import { createDepositSession, PAYMENTS_MODE } from "@/lib/stripe";
  *   4. write a PENDING bid
  *   5. open a deposit checkout
  *
- * The bid only becomes live once the deposit settles - via the Stripe webhook
+ * The bid only becomes live once the deposit settles - via the Safepay webhook
  * in live mode, or immediately here in mock mode. Until then it holds no claim
  * on the panel, so two people bidding at once cannot both take it.
  */
@@ -72,7 +73,9 @@ export async function POST(request: NextRequest) {
       amount_usd: input.amountUsd,
       deposit_usd: depositUsd,
       status: "PENDING",
-      payment_provider: PAYMENTS_MODE === "live" ? "stripe" : "mock",
+      payment_provider: PAYMENTS_MODE === "live" ? "safepay" : "mock",
+      payment_currency: "USD",
+      payment_amount_minor: toPaymentAmount(depositUsd),
     })
     .select("id")
     .single();
@@ -97,8 +100,12 @@ export async function POST(request: NextRequest) {
       depositUsd,
     });
   } catch (error) {
-    // Never leave an orphan PENDING row behind a failed checkout.
-    await getSupabaseAdmin().from("bids").delete().eq("id", bid.id);
+    // A live tracker may already exist if a later SDK step failed. Keep that
+    // row so a provider webhook can still reconcile it by bid metadata. Local
+    // mock/misconfigured attempts have no provider-side payment to reconcile.
+    if (PAYMENTS_MODE !== "live") {
+      await getSupabaseAdmin().from("bids").delete().eq("id", bid.id);
+    }
     console.error("[bids] checkout failed", error);
     return NextResponse.json(
       { error: "Could not open the payment step. Please try again." },
@@ -109,7 +116,8 @@ export async function POST(request: NextRequest) {
   // In mock mode no webhook is coming, so settle here to keep the two modes
   // behaviourally identical from the browser's point of view.
   if (session.mode === "mock") {
-    await settleDeposit(bid.id, session.reference);
+    const settlement = await settleDeposit(bid.id, session.reference);
+    await refundOutbidBids(settlement.outbidBids);
   } else {
     const { error } = await getSupabaseAdmin()
       .from("bids")

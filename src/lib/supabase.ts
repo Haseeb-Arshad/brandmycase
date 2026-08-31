@@ -13,8 +13,28 @@ export type BidRow = Record<string, unknown> & {
   status: string;
   payment_provider: string;
   payment_ref: string | null;
+  payment_currency: string;
+  payment_amount_minor: number | null;
+  payment_captured_at: string | null;
+  refund_status: string;
+  refund_ref: string | null;
+  refund_amount_minor: number;
+  refund_requested_at: string | null;
+  refunded_at: string | null;
+  refund_error: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type PaymentWebhookEventRow = {
+  provider: string;
+  event_id: string;
+  event_type: string;
+  payload: Record<string, unknown>;
+  status: string;
+  error_message: string | null;
+  received_at: string;
+  processed_at: string | null;
 };
 
 export interface Database {
@@ -34,6 +54,15 @@ export interface Database {
           status?: string;
           payment_provider?: string;
           payment_ref?: string | null;
+          payment_currency?: string;
+          payment_amount_minor?: number | null;
+          payment_captured_at?: string | null;
+          refund_status?: string;
+          refund_ref?: string | null;
+          refund_amount_minor?: number;
+          refund_requested_at?: string | null;
+          refunded_at?: string | null;
+          refund_error?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -48,8 +77,41 @@ export interface Database {
           status: string;
           payment_provider: string;
           payment_ref: string | null;
+          payment_currency: string;
+          payment_amount_minor: number | null;
+          payment_captured_at: string | null;
+          refund_status: string;
+          refund_ref: string | null;
+          refund_amount_minor: number;
+          refund_requested_at: string | null;
+          refunded_at: string | null;
+          refund_error: string | null;
           created_at: string;
           updated_at: string;
+        }>;
+        Relationships: [];
+      };
+      payment_webhook_events: {
+        Row: PaymentWebhookEventRow;
+        Insert: {
+          provider: string;
+          event_id: string;
+          event_type: string;
+          payload: Record<string, unknown>;
+          status?: string;
+          error_message?: string | null;
+          received_at?: string;
+          processed_at?: string | null;
+        };
+        Update: Partial<{
+          provider: string;
+          event_id: string;
+          event_type: string;
+          payload: Record<string, unknown>;
+          status: string;
+          error_message: string | null;
+          received_at: string;
+          processed_at: string | null;
         }>;
         Relationships: [];
       };
@@ -62,7 +124,7 @@ export interface Database {
           p_bid_id: string;
           p_payment_ref: string;
         };
-        Returns: null;
+        Returns: unknown;
       };
     };
     Enums: Record<string, never>;

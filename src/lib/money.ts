@@ -2,8 +2,8 @@
  * Money helpers.
  *
  * Every amount in this codebase is an integer number of whole US dollars.
- * There are no floats and no cents anywhere except at the Stripe boundary,
- * where `toStripeAmount` converts once. Bids on physical panels are never
+ * There are no floats and no cents anywhere except at the payment boundary,
+ * where `toPaymentAmount` converts once. Bids on physical panels are never
  * fractional, so this keeps every comparison exact.
  */
 
@@ -54,7 +54,7 @@ export function formatUsdCompact(amountUsd: number): string {
   return "$" + amountUsd;
 }
 
-/** Stripe wants the smallest currency unit. This is the only cents conversion. */
-export function toStripeAmount(amountUsd: number): number {
+/** Card processors want the smallest currency unit. */
+export function toPaymentAmount(amountUsd: number): number {
   return Math.round(amountUsd * 100);
 }

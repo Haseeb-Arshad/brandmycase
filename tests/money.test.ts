@@ -4,7 +4,7 @@ import {
   minimumNextBid,
   formatUsd,
   formatUsdCompact,
-  toStripeAmount,
+  toPaymentAmount,
   DEPOSIT_MINIMUM_USD,
 } from "@/lib/money";
 
@@ -67,9 +67,9 @@ describe("formatting", () => {
   });
 });
 
-describe("toStripeAmount", () => {
+describe("toPaymentAmount", () => {
   it("converts whole dollars to cents exactly once", () => {
-    expect(toStripeAmount(9_600)).toBe(960_000);
-    expect(toStripeAmount(50)).toBe(5_000);
+    expect(toPaymentAmount(9_600)).toBe(960_000);
+    expect(toPaymentAmount(50)).toBe(5_000);
   });
 });
