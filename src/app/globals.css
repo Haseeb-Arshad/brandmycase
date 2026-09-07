@@ -1261,8 +1261,15 @@ details p {
   font-size: 12.5px !important;
   color: var(--ink-3) !important;
 }
+/* The proof is a phone screenshot: tall, dark, and not a designed asset. It is
+   capped in height and centred rather than stretched to the column, so an
+   uncropped portrait grab does not become the tallest thing on the page. */
 .proof-figure img {
-  width: 100%;
+  display: block;
+  max-width: 100%;
+  max-height: 460px;
+  width: auto;
+  margin-inline: auto;
   border-radius: 14px;
   border: 1px solid var(--hairline);
 }

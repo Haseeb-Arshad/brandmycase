@@ -13,6 +13,15 @@ import { NextRequest } from "next/server";
  * one of these ever hangs or throws a connection error, the guard is gone.
  */
 
+/**
+ * The first test to touch a route pulls in that route's whole module graph —
+ * Next's server runtime, the Supabase client, the Safepay SDK — and on a busy
+ * machine that transpile alone can outrun vitest's 5s default and fail a test
+ * that never got as far as an assertion. The guards themselves answer in
+ * microseconds; this budget is for the import, not for the code under test.
+ */
+const IMPORT_BUDGET_MS = 30_000;
+
 const post = (url: string, body: unknown) =>
   new NextRequest(url, {
     method: "POST",
@@ -37,13 +46,13 @@ describe("POST /api/bids", () => {
     // Nothing that could be mistaken for a receipt: no bid id, no redirect,
     // no deposit, no mode.
     expect(body).toEqual({ error: "Not found." });
-  });
+  }, IMPORT_BUDGET_MS);
 
   it("refuses a well-formed body just the same", async () => {
     const { POST } = await import("@/app/api/bids/route");
     const response = await POST(post("http://localhost:3000/api/bids", {}));
     expect(response.status).toBe(404);
-  });
+  }, IMPORT_BUDGET_MS);
 });
 
 describe("GET /api/board", () => {
@@ -54,7 +63,7 @@ describe("GET /api/board", () => {
     expect(response.status).toBe(404);
     const text = await response.text();
     expect(text).not.toMatch(/raisedUsd|goalUsd|reserveFloor|sponsor|currentBid/i);
-  });
+  }, IMPORT_BUDGET_MS);
 });
 
 describe("POST /api/webhooks/safepay", () => {
@@ -69,5 +78,5 @@ describe("POST /api/webhooks/safepay", () => {
     );
 
     expect(response.status).toBe(503);
-  });
+  }, IMPORT_BUDGET_MS);
 });

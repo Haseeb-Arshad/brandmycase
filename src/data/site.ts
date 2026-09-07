@@ -104,9 +104,18 @@ export const TRIP = {
  */
 export const ACCEPTANCE_PROOF = {
   image: env("NEXT_PUBLIC_ACCEPTANCE_PROOF_IMAGE"),
-  imageAlt: "Redacted acceptance confirmation supplied by Haseeb Arshad",
+  imageAlt:
+    "The acceptance email for OpenAI DevDay 2026, as received by Haseeb Arshad",
   fallback: "Acceptance proof available to prospective sponsors.",
   note: "Happy to share the confirmation email directly with any company considering a sponsorship — just ask.",
+  /**
+   * Shown beside a published screenshot. It answers the question a sponsor
+   * actually has when they see a ticket email on a page asking for money:
+   * am I buying somebody a conference ticket? No — the ticket is his, it is
+   * non-transferable, and it is not what a sponsorship buys.
+   */
+  withImage:
+    "The invitation, as it arrived. The registration link is not shown: the ticket is mine and is non-transferable, and it is not what a sponsorship buys — a sponsorship buys a placement on the case.",
 } as const;
 
 export interface Benefit {

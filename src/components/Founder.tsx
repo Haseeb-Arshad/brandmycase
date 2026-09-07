@@ -86,10 +86,18 @@ export function AcceptanceProof() {
               Accepted to attend {TRIP.event} in {TRIP.to}
               {TRIP.date ? `, ${TRIP.date}` : ""}.
             </h2>
-            <p>
-              {ACCEPTANCE_PROOF.image ? ACCEPTANCE_PROOF.note : ACCEPTANCE_PROOF.fallback}
-            </p>
-            {!ACCEPTANCE_PROOF.image && <p>{ACCEPTANCE_PROOF.note}</p>}
+            {ACCEPTANCE_PROOF.image ? (
+              <p>{ACCEPTANCE_PROOF.withImage}</p>
+            ) : (
+              <>
+                <p>{ACCEPTANCE_PROOF.fallback}</p>
+                <p>{ACCEPTANCE_PROOF.note}</p>
+              </>
+            )}
+            {/* The disclosure sits directly under the screenshot on purpose.
+                The email carries OpenAI's own branding, so the one place a
+                reader could mistake proof-of-attendance for endorsement is
+                exactly here. */}
             <p className="proof-disclosure">{TRIP.disclosure}.</p>
           </div>
 
@@ -97,7 +105,10 @@ export function AcceptanceProof() {
             <figure className="proof-figure">
               {/* eslint-disable-next-line @next/next/no-img-element -- owner-supplied URL */}
               <img src={ACCEPTANCE_PROOF.image} alt={ACCEPTANCE_PROOF.imageAlt} />
-              <figcaption>Redacted confirmation, supplied by {FOUNDER.name}.</figcaption>
+              {/* Says only what is true of whatever image is configured. An
+                  earlier version called it "redacted", which would have been a
+                  claim about the file rather than a description of it. */}
+              <figcaption>Supplied by {FOUNDER.name}.</figcaption>
             </figure>
           )}
         </div>
