@@ -44,9 +44,10 @@ export function FundingProgress({ compact = false }: { compact?: boolean }) {
 
       <p className="funding-meta">
         {confirmedCount === 0 ? (
+          // The placement count is already in the hero eyebrow; saying it twice
+          // in four lines reads as filler.
           <>
-            <b>No sponsors confirmed yet</b> · {stats.available} placements open ·
-            founding sponsor positions are open
+            <b>No sponsors confirmed yet</b> · founding sponsor positions are open
           </>
         ) : (
           <>

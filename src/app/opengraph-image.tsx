@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { CAMPAIGN_GOAL_USD, TIER_BY_ID, formatUsd } from "@/data/sponsorship";
+import { TIER_BY_ID, formatUsd } from "@/data/sponsorship";
 
 /**
  * The share card.
@@ -46,16 +46,17 @@ export default async function OpengraphImage() {
           >
             Brand the Case · by Haseeb Arshad
           </div>
-          <div style={{ display: "flex", fontSize: 68, fontWeight: 700, lineHeight: 1.1 }}>
-            I&apos;m taking this case to DevDay. Your brand can come with me.
+          <div style={{ display: "flex", fontSize: 96, fontWeight: 700, lineHeight: 1.05 }}>
+            Your brand, on my case.
           </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           <div style={{ display: "flex", fontSize: 32, color: "#56565c" }}>
-            A developer from Pakistan, heading to OpenAI DevDay in San Francisco.{" "}
-            {formatUsd(CAMPAIGN_GOAL_USD)} goal · sponsorship from{" "}
-            {formatUsd(TIER_BY_ID.SUPPORTER.priceUsd)}.
+            Twenty measured placements on one travelling case. San Francisco, for
+            OpenAI DevDay. Sponsorship from{" "}
+            {formatUsd(TIER_BY_ID.SUPPORTER.priceUsd)} to{" "}
+            {formatUsd(TIER_BY_ID.ANCHOR.priceUsd)}.
           </div>
           <div style={{ display: "flex", fontSize: 24, color: "#86868b" }}>
             Independent project · Not affiliated with, sponsored by or endorsed by

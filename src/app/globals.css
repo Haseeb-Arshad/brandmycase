@@ -311,12 +311,6 @@ h1 {
 .hero h1 {
   margin-top: 20px;
 }
-/* Controlled line breaks, but only once the line actually fits. */
-@media (min-width: 640px) {
-  .hero-title span {
-    display: block;
-  }
-}
 .hero .lede {
   margin-top: 16px;
 }

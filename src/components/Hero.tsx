@@ -1,43 +1,45 @@
 "use client";
 
-import { formatUsd, CAMPAIGN_GOAL_USD, TIER_BY_ID } from "@/data/sponsorship";
+import { formatUsd, TIER_BY_ID } from "@/data/sponsorship";
 import { TRIP } from "@/data/site";
+import { useCampaign } from "@/components/CampaignProvider";
 import { FundingProgress } from "@/components/FundingProgress";
 import { SponsorButton } from "@/components/SponsorButton";
 
 /**
  * The hero.
  *
- * Someone arriving from a cold email has about ten seconds. In that time this
- * has to say who I am, what happened, what I need, what it costs and what to
- * click — so the headline carries the offer, the lede carries the facts, and
- * the funding bar carries the proof. No countdown, no urgency device, no
- * statistics that are really just adjectives.
+ * Four lines, in this order: what is on offer, where it is going, what it
+ * costs, and the button. Someone arriving from a cold email has about ten
+ * seconds, and the headline has to spend them on the offer rather than on an
+ * introduction or an appeal.
+ *
+ * The copy is deliberately not written as fundraising. Nobody is being asked
+ * for money toward a goal here — a company is being offered a physical
+ * placement at a price. The $3,000 is on the funding bar underneath, where a
+ * number belongs, and it does not need a sentence pleading for it.
  */
 export function Hero() {
+  const { stats } = useCampaign();
+
   return (
     <header className="hero" id="top">
       <p className="eyebrow">
         <span className="dot" aria-hidden="true" />
-        Independent developer sponsorship project
+        Independent sponsorship project
+        <span className="eyebrow-sep" aria-hidden="true">
+          ·
+        </span>
+        <span className="tnum">{stats.available}</span> of {stats.total} placements
+        open
       </p>
 
-      {/* Spans rather than hard breaks: the line break is imposed only where
-          there is room for it, so narrow screens wrap naturally. */}
-      <h1 className="hero-title">
-        <span>I&rsquo;m taking this case to DevDay.</span>{" "}
-        <span>Your brand can come with me.</span>
-      </h1>
+      <h1>Your brand, on my case.</h1>
 
-      {/* Trip first, person later. Someone arriving from a cold email wants to
-          know what is being offered, not who is offering it — the introduction
-          waits until the bottom of the page, where it reads as a signature
-          rather than a preamble. */}
       <p className="lede">
-        I&rsquo;ve been accepted to attend {TRIP.event} in {TRIP.to}
-        {TRIP.date ? ` on ${TRIP.date}` : ""}, and I&rsquo;m raising{" "}
-        {formatUsd(CAMPAIGN_GOAL_USD)} to get there from {TRIP.from}. A handful of
-        companies can put their logo on the travel case coming with me — from{" "}
+        Your logo travels on the hardest-working object in tech: a developer&rsquo;s
+        carry-on. {TRIP.to}, for {TRIP.event}
+        {TRIP.date ? `, ${TRIP.date}` : ""}. Placements from{" "}
         {formatUsd(TIER_BY_ID.SUPPORTER.priceUsd)}.
       </p>
 
