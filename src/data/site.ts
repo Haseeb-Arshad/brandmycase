@@ -66,10 +66,16 @@ export const FOUNDER = {
   ].filter((link): link is { label: string; href: string; event: string } =>
     Boolean(link.href),
   ),
-  /** Two short paragraphs. Written as a person, not a campaign operator. */
+  /**
+   * Two short paragraphs. Written as a person, not a campaign operator.
+   *
+   * This sits near the bottom of the page, after the offer, so it reads as a
+   * signature rather than an introduction — and it does not re-explain the
+   * campaign the reader has already been through.
+   */
   bio: [
     "I'm Haseeb. I build software from Pakistan — mostly web and AI things, mostly on my own time.",
-    "I was accepted to attend OpenAI DevDay in San Francisco. Getting from here to there costs real money, so instead of asking anyone for a donation I'm selling something I can actually deliver: physical brand placements on the travel case that is coming with me.",
+    "Getting from here to San Francisco costs real money. Rather than ask anyone for a donation, I'd rather sell something I can actually deliver, and then document it properly for the companies who made the trip possible.",
   ],
 } as const;
 

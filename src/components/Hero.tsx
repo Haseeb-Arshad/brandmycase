@@ -1,6 +1,6 @@
 "use client";
 
-import { formatUsd, CAMPAIGN_GOAL_USD } from "@/data/sponsorship";
+import { formatUsd, CAMPAIGN_GOAL_USD, TIER_BY_ID } from "@/data/sponsorship";
 import { TRIP } from "@/data/site";
 import { FundingProgress } from "@/components/FundingProgress";
 import { SponsorButton } from "@/components/SponsorButton";
@@ -29,13 +29,16 @@ export function Hero() {
         <span>Your brand can come with me.</span>
       </h1>
 
+      {/* Trip first, person later. Someone arriving from a cold email wants to
+          know what is being offered, not who is offering it — the introduction
+          waits until the bottom of the page, where it reads as a signature
+          rather than a preamble. */}
       <p className="lede">
-        I&rsquo;m Haseeb, a developer from {TRIP.from}. I&rsquo;ve been accepted to
-        attend {TRIP.event} in {TRIP.to}
+        I&rsquo;ve been accepted to attend {TRIP.event} in {TRIP.to}
         {TRIP.date ? ` on ${TRIP.date}` : ""}, and I&rsquo;m raising{" "}
-        {formatUsd(CAMPAIGN_GOAL_USD)} to get there. A handful of companies can put
-        their logo on the travel case that&rsquo;s coming with me — from{" "}
-        {formatUsd(250)}.
+        {formatUsd(CAMPAIGN_GOAL_USD)} to get there from {TRIP.from}. A handful of
+        companies can put their logo on the travel case coming with me — from{" "}
+        {formatUsd(TIER_BY_ID.SUPPORTER.priceUsd)}.
       </p>
 
       <p className="disclosure-chip">{TRIP.disclosure}</p>

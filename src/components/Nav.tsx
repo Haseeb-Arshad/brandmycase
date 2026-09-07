@@ -21,10 +21,12 @@ export function Nav() {
         </a>
 
         <div className="nav-links">
+          {/* Same order as the page, so the nav is a map of it rather than a
+              second opinion about what matters. */}
           <a href="/#sponsorship">Sponsorship</a>
           <a href="/#case">The case</a>
-          <a href="/#founder">Who&rsquo;s carrying it</a>
           <a href="/#faq">FAQ</a>
+          <a href="/#founder">Who&rsquo;s carrying it</a>
         </div>
 
         <div className="nav-right">

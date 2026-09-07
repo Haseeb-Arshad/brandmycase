@@ -19,10 +19,15 @@ import {
 /**
  * The campaign homepage.
  *
- * Ordered as a conversion sequence rather than as a site map: who I am, why
- * the trip, what it costs, what you get, and then the questions a finance team
- * will ask. Somebody arriving from a cold email should be able to stop reading
- * at any point and still know what they were asked.
+ * Ordered as a conversion sequence rather than as a site map: the trip and the
+ * offer first, then the object, then what a sponsor gets, then the questions a
+ * finance team will ask. Somebody arriving from a cold email should be able to
+ * stop reading at any point and still know what they were asked.
+ *
+ * The introduction comes last on purpose. A stranger clicking a cold email
+ * wants to know what is being offered before they want to know who is offering
+ * it — so "who's carrying the case" and the acceptance proof sit at the
+ * bottom, where they read as a signature rather than a preamble.
  *
  * The page is rendered per request because the funding bar and panel
  * availability come from confirmed sponsorships in Supabase. With no database
@@ -44,8 +49,6 @@ export default async function HomePage() {
       <Nav />
       <main>
         <Hero />
-        <Founder />
-        <AcceptanceProof />
         <Packages />
         <CaseSection />
         <SponsorValue />
@@ -53,6 +56,8 @@ export default async function HomePage() {
         <ConfirmedSponsors sponsors={sponsors} />
         <Budget />
         <FaqSection />
+        <Founder />
+        <AcceptanceProof />
         <Transparency />
         <FinalCta />
       </main>

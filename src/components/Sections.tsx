@@ -309,6 +309,7 @@ export function SiteFooter() {
         <div className="footer-links">
           <Link href="/#sponsorship">Sponsorship</Link>
           <Link href="/#case">The case</Link>
+          <Link href="/#faq">FAQ</Link>
           <Link href="/#founder">{FOUNDER.name}</Link>
           <Link href="/#independent">Independence</Link>
           <Link href="/privacy">Privacy</Link>

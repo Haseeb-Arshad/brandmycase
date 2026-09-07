@@ -12,7 +12,7 @@ import type { AnalyticsEvent } from "@/lib/analytics";
  */
 export function Founder() {
   return (
-    <section className="section founder" id="founder">
+    <section className="section founder" id="founder" style={{ background: "var(--surface)" }}>
       <div className="wrap-mid">
         <div className="section-head">
           <p className="section-kicker">The person</p>
@@ -77,7 +77,7 @@ export function Founder() {
  */
 export function AcceptanceProof() {
   return (
-    <section className="section proof" id="proof" style={{ background: "var(--surface)" }}>
+    <section className="section proof" id="proof">
       <div className="wrap-mid">
         <div className="proof-card">
           <div className="proof-body">
