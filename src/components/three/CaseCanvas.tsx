@@ -3,7 +3,7 @@
 import { Suspense, type RefObject } from "react";
 import { Canvas } from "@react-three/fiber";
 import { CaseScene } from "@/components/three/CaseScene";
-import type { PanelState } from "@/lib/auction";
+import type { PlacementState } from "@/lib/placement-board";
 
 /**
  * The WebGL surface. Split from CaseStage so it can be dynamically imported
@@ -12,10 +12,10 @@ import type { PanelState } from "@/lib/auction";
  */
 
 interface CaseCanvasProps {
-  panels: PanelState[];
+  panels: PlacementState[];
   targetAngle: RefObject<number>;
   suppressClick: RefObject<boolean>;
-  onSelect: (panel: PanelState) => void;
+  onSelect: (panel: PlacementState) => void;
 }
 
 export default function CaseCanvas({
@@ -30,7 +30,7 @@ export default function CaseCanvas({
       shadows
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false }}
-      camera={{ position: [0.08, 0.5, 2.8], fov: 32, near: 0.1, far: 40 }}
+      camera={{ position: [0.07, 0.42, 3.15], fov: 32, near: 0.1, far: 40 }}
     >
       <Suspense fallback={null}>
         <CaseScene

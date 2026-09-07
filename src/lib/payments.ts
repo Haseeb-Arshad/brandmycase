@@ -1,38 +1,105 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import Safepay from "@sfpy/node-core";
 import { toPaymentAmount } from "@/lib/money";
+import { CAMPAIGN_MODE, type CampaignMode } from "@/lib/campaign";
 
 /**
- * Provider boundary for the auction.
+ * FUTURE / DISABLED IN THE FOUNDING EDITION.
  *
- * With no Safepay keys, local development stays deterministic and uses the
- * mock path. A partially configured account is deliberately not treated as
- * mock mode: that would make a deployment look healthy while silently taking
- * no real payments.
+ * This module is the provider boundary for the retired bid-and-deposit
+ * auction. The Founding Edition takes no payment of any kind, so in the
+ * shipped configuration every function here refuses to do anything.
+ *
+ * It is kept, rather than deleted, because the Safepay integration is real
+ * work - signed webhooks, an idempotent event ledger, durable refunds - and
+ * re-deriving it later would be worse than carrying it dormant. See
+ * docs/06-payments.md and docs/12-founding-edition-launch.md.
+ *
+ * THE SAFETY RULE
+ * ---------------
+ * A mock payment is a useful development fiction and a catastrophic thing to
+ * show a real visitor: it tells somebody money moved when it did not. So mock
+ * mode is gated three deep. It requires all of:
+ *
+ *   1. CAMPAIGN_MODE=auction        (never true in the Founding Edition)
+ *   2. a non-production NODE_ENV    (never true on a deployed build)
+ *   3. no payment credentials at all
+ *
+ * Any production deployment therefore lands on `disabled` or `misconfigured`,
+ * never on `mock`. `resolvePaymentMode` below is a pure function precisely so
+ * that this matrix is testable rather than asserted in a comment.
  */
 
-export type PaymentsMode = "mock" | "live" | "misconfigured";
+export type PaymentMode = "live" | "mock" | "disabled" | "misconfigured";
+/** @deprecated Retained for the dormant auction modules. Use PaymentMode. */
+export type PaymentsMode = PaymentMode;
 export type SafepayEnvironment = "sandbox" | "production";
 
-const publicKey = process.env.SAFEPAY_PUBLIC_KEY?.trim();
-const privateKey = process.env.SAFEPAY_SECRET_KEY?.trim();
-const webhookSecret = process.env.SAFEPAY_WEBHOOK_SECRET?.trim();
+export interface PaymentEnvironment {
+  campaignMode: CampaignMode;
+  nodeEnv: string | undefined;
+  publicKey: string | undefined;
+  secretKey: string | undefined;
+  webhookSecret: string | undefined;
+}
+
+const clean = (value: string | undefined) => value?.trim() || undefined;
+
+/**
+ * The whole payment-mode decision, as one pure function.
+ *
+ *   campaign is not `auction`    -> disabled   (the Founding Edition, always)
+ *   production, no credentials   -> disabled
+ *   any env, partial credentials -> misconfigured
+ *   any env, full credentials    -> live
+ *   non-production, none set     -> mock       (local development only)
+ */
+export function resolvePaymentMode(env: PaymentEnvironment): PaymentMode {
+  // The campaign switch wins over everything. If the site is not running an
+  // auction there is nothing to charge for, so no payment path may open.
+  if (env.campaignMode !== "auction") return "disabled";
+
+  const publicKey = clean(env.publicKey);
+  const secretKey = clean(env.secretKey);
+  const webhookSecret = clean(env.webhookSecret);
+
+  const configured = [publicKey, secretKey, webhookSecret].filter(Boolean).length;
+  if (configured === 3) return "live";
+  // A half-configured account must never look healthy: it would take orders
+  // and settle nothing.
+  if (configured > 0) return "misconfigured";
+
+  // No credentials at all. Deterministic mock is fine on a developer's
+  // machine and is never acceptable in front of a real visitor.
+  return env.nodeEnv === "production" ? "disabled" : "mock";
+}
+
+const publicKey = clean(process.env.SAFEPAY_PUBLIC_KEY);
+const privateKey = clean(process.env.SAFEPAY_SECRET_KEY);
+const webhookSecret = clean(process.env.SAFEPAY_WEBHOOK_SECRET);
 const configuredEnvironment = process.env.SAFEPAY_ENVIRONMENT?.trim().toLowerCase();
 const configuredIntent = process.env.SAFEPAY_INTENT?.trim().toUpperCase();
 
 export const SAFEPAY_ENVIRONMENT: SafepayEnvironment =
   configuredEnvironment === "production" ? "production" : "sandbox";
 
-export const SAFEPAY_INTENT =
-  configuredIntent === "MPGS" ? "MPGS" : "CYBERSOURCE";
+export const SAFEPAY_INTENT = configuredIntent === "MPGS" ? "MPGS" : "CYBERSOURCE";
 
-const hasAnyPaymentConfig = Boolean(publicKey || privateKey || webhookSecret);
-export const PAYMENTS_MODE: PaymentsMode =
-  publicKey && privateKey && webhookSecret
-    ? "live"
-    : hasAnyPaymentConfig
-      ? "misconfigured"
-      : "mock";
+export const PAYMENT_MODE: PaymentMode = resolvePaymentMode({
+  campaignMode: CAMPAIGN_MODE,
+  nodeEnv: process.env.NODE_ENV,
+  publicKey,
+  secretKey: privateKey,
+  webhookSecret,
+});
+
+/** @deprecated Retained for the dormant auction modules. Use PAYMENT_MODE. */
+export const PAYMENTS_MODE: PaymentMode = PAYMENT_MODE;
+
+/** Is any payment surface allowed to be reachable by a visitor right now? */
+export function paymentsEnabled(mode: PaymentMode = PAYMENT_MODE): boolean {
+  return mode === "live" || mode === "mock";
+}
 
 const safepayHost =
   SAFEPAY_ENVIRONMENT === "production"
@@ -40,7 +107,7 @@ const safepayHost =
     : "https://sandbox.api.getsafepay.com";
 
 export const safepay =
-  PAYMENTS_MODE === "live"
+  PAYMENT_MODE === "live"
     ? new Safepay(privateKey!, { authType: "secret", host: safepayHost })
     : null;
 
@@ -106,21 +173,35 @@ function responseReference(value: unknown): string | null {
 }
 
 function requireLiveClient(): NonNullable<typeof safepay> {
-  if (PAYMENTS_MODE !== "live" || !safepay) {
-    throw new Error(
-      PAYMENTS_MODE === "misconfigured"
-        ? "Safepay is partially configured; set SAFEPAY_PUBLIC_KEY, SAFEPAY_SECRET_KEY, and SAFEPAY_WEBHOOK_SECRET."
-        : "Safepay live credentials are not configured.",
-    );
+  if (PAYMENT_MODE !== "live" || !safepay) {
+    throw new Error(paymentModeError());
   }
   return safepay;
+}
+
+/** One place that turns a non-live mode into an operator-legible message. */
+export function paymentModeError(mode: PaymentMode = PAYMENT_MODE): string {
+  switch (mode) {
+    case "disabled":
+      return "Payments are disabled. The campaign runs in interest mode: sponsorships are invoiced directly and no payment is taken on the site.";
+    case "misconfigured":
+      return "Safepay is partially configured; set SAFEPAY_PUBLIC_KEY, SAFEPAY_SECRET_KEY, and SAFEPAY_WEBHOOK_SECRET.";
+    case "mock":
+      return "Safepay is in local mock mode and has no live credentials.";
+    case "live":
+      return "Safepay live credentials are configured.";
+  }
 }
 
 /** Create a hosted Safepay Express Checkout session for the refundable deposit. */
 export async function createDepositSession(req: DepositRequest): Promise<DepositSession> {
   const base = siteUrl();
 
-  if (PAYMENTS_MODE === "mock") {
+  if (PAYMENT_MODE === "disabled" || PAYMENT_MODE === "misconfigured") {
+    throw new Error(paymentModeError());
+  }
+
+  if (PAYMENT_MODE === "mock") {
     const reference = "mock_dep_" + req.bidId;
     return {
       mode: "mock",
@@ -212,8 +293,15 @@ export function verifySafepayWebhook(
   return { ...event, token, type, data: record(event.data) ?? undefined };
 }
 
+/**
+ * Can the webhook route accept anything at all?
+ *
+ * Both conditions matter. A configured secret with payments disabled must
+ * still refuse: settling a bid while the public site is an inquiry campaign
+ * would put money against an offer nobody was shown.
+ */
 export function webhookIsConfigured(): boolean {
-  return Boolean(webhookSecret);
+  return PAYMENT_MODE === "live" && Boolean(webhookSecret);
 }
 
 export function webhookMetadataValue(

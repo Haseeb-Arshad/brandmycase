@@ -9,6 +9,7 @@ import {
   webhookString,
 } from "@/lib/payments";
 import { finishPaymentWebhook, recordPaymentWebhook } from "@/lib/payment-events";
+import { auctionEndpointsEnabled } from "@/lib/campaign";
 import {
   markRefundSucceeded,
   refundOutbidBids,
@@ -17,11 +18,16 @@ import {
 import { toPaymentAmount } from "@/lib/money";
 
 /**
- * POST /api/webhooks/safepay
+ * POST /api/webhooks/safepay — FUTURE / DISABLED IN THE FOUNDING EDITION.
  *
  * Safepay is the only authority that can make a production bid live. The raw
  * body is verified with HMAC-SHA512 before JSON fields are trusted. Event
  * tokens are persisted so retries are harmless.
+ *
+ * `webhookIsConfigured()` now requires the payment mode to be `live`, which in
+ * turn requires CAMPAIGN_MODE=auction. While the site runs the Founding
+ * Edition this route answers 503 and settles nothing, even if a webhook secret
+ * happens to be left in the environment.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -153,9 +159,9 @@ async function handlePaymentRefunded(data: Record<string, unknown>): Promise<voi
 }
 
 export async function POST(request: NextRequest) {
-  if (!webhookIsConfigured()) {
+  if (!auctionEndpointsEnabled() || !webhookIsConfigured()) {
     return NextResponse.json(
-      { error: "Safepay webhook secret is not configured." },
+      { error: "Safepay webhooks are not enabled for this deployment." },
       { status: 503 },
     );
   }

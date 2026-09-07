@@ -1,94 +1,78 @@
-import { SPECS, STEPS, TOUR, FAQ, SITE } from "@/data/site";
-import { RESERVE_FLOOR_USD, PLACEMENTS, CASE } from "@/data/placements";
-import { formatUsd } from "@/lib/money";
+import Link from "next/link";
+import {
+  BENEFITS,
+  BENEFIT_FINE_PRINT,
+  BUDGET,
+  BUDGET_COPY,
+  BUDGET_HAS_AMOUNTS,
+  CONTACT_EMAIL,
+  DISCLOSURE,
+  FAQ,
+  FOUNDER,
+  SITE,
+  STEPS,
+  TRIP,
+} from "@/data/site";
+import { CAMPAIGN_GOAL_USD, formatUsd } from "@/data/sponsorship";
+import type { PublicSponsor } from "@/lib/funding";
+import { SponsorButton } from "@/components/SponsorButton";
+import { TrackedLink } from "@/components/TrackedLink";
 
 /**
- * The static editorial sections.
+ * The editorial sections.
  *
- * These are server components: no state, no effects, no client bundle. Only the
- * three auction-driven pieces (hero, inventory, ticker) ship JavaScript.
+ * These are server components: no state, no effects, no client bundle. Only
+ * the hero, the case, the package cards and the form ship JavaScript, and only
+ * because they need interaction.
+ *
+ * The copy discipline here is the product. Nothing describes an outcome this
+ * project does not control — no impressions, no venue access, no audience
+ * figures, no endorsement — and where a thing depends on somebody else it is
+ * said in the same sentence rather than in a footnote.
  */
 
-export function StatsStrip() {
+/** Contact goes to a real address if one is configured, else to the form. */
+export function ContactLink({ className }: { className?: string }) {
+  if (!CONTACT_EMAIL) {
+    return (
+      <a className={className} href="/#sponsorship">
+        use the sponsorship form
+      </a>
+    );
+  }
   return (
-    <section className="wrap" aria-label="The case at a glance">
-      <div className="stats">
-        <div>
-          <b className="tnum">{PLACEMENTS.length}</b>
-          <span>brandable panels</span>
-        </div>
-        <div>
-          <b className="tnum">5</b>
-          <span>faces of the case</span>
-        </div>
-        <div>
-          <b className="tnum">{TOUR.length}</b>
-          <span>cities in the tour</span>
-        </div>
-        <div>
-          <b className="tnum">12</b>
-          <span>months on the shell</span>
-        </div>
-      </div>
-    </section>
+    <TrackedLink className={className} href={`mailto:${CONTACT_EMAIL}`} event="click_email">
+      {CONTACT_EMAIL}
+    </TrackedLink>
   );
 }
 
-export function Story() {
+export function SponsorValue() {
   return (
-    <section className="section" id="case-story">
+    <section className="section" id="what-you-get">
       <div className="wrap-mid">
         <div className="section-head">
-          <p className="section-kicker">The big idea</p>
+          <p className="section-kicker">What sponsors receive</p>
           <h2 className="h2" style={{ marginTop: 10 }}>
-            Luggage becomes media.
+            The logo isn&rsquo;t an ad unit. It&rsquo;s physically coming with me.
           </h2>
           <p className="lede">
-            Most sponsorships vanish in a scroll. This one gets wheeled through
-            security at SFO, stood next to a stage, photographed in a hotel lobby,
-            and put in an overhead bin above a row of people who build for a living.
+            I built the case because a sponsorship should be something you can
+            actually point at. Here is everything you get, and nothing you don&rsquo;t.
           </p>
         </div>
 
-        <div
-          style={{
-            maxWidth: 620,
-            margin: "44px auto 0",
-            borderRadius: 18,
-            border: "1px solid var(--hairline)",
-            overflow: "hidden",
-          }}
-        >
-          {SPECS.map((spec, i) => (
-            <div
-              key={spec.label}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "88px 1fr",
-                gap: 16,
-                padding: "15px 20px",
-                borderTop: i === 0 ? undefined : "1px solid var(--hairline)",
-                fontSize: 14,
-              }}
-            >
-              <span style={{ fontWeight: 500 }}>{spec.label}</span>
-              <span style={{ color: "var(--ink-2)" }}>{spec.value}</span>
-            </div>
+        <div className="benefits">
+          {BENEFITS.map((benefit) => (
+            <article className="benefit" key={benefit.no}>
+              <span className="benefit-no tnum">{benefit.no}</span>
+              <h3>{benefit.title}</h3>
+              <p>{benefit.body}</p>
+            </article>
           ))}
         </div>
 
-        <p
-          style={{
-            marginTop: 18,
-            textAlign: "center",
-            fontSize: 13,
-            color: "var(--ink-3)",
-          }}
-        >
-          Shell is {Math.round(CASE.width * 100)} &times;{" "}
-          {Math.round(CASE.height * 100)} &times; {Math.round(CASE.depth * 100)} cm.
-          Every panel on the case is measured, not decorative.
-        </p>
+        <p className="fine-print">{BENEFIT_FINE_PRINT}</p>
       </div>
     </section>
   );
@@ -96,72 +80,135 @@ export function Story() {
 
 export function HowItWorks() {
   return (
-    <section className="section" id="how" style={{ background: "var(--background)" }}>
+    <section className="section" id="how" style={{ background: "var(--surface)" }}>
       <div className="wrap-mid">
         <div className="section-head">
           <p className="section-kicker">How it works</p>
           <h2 className="h2" style={{ marginTop: 10 }}>
-            Three steps. One travelling case.
+            Four steps. No checkout.
           </h2>
         </div>
 
         <div className="steps">
-          {STEPS.map((step, i) => (
+          {STEPS.map((step) => (
             <article className="step" key={step.title}>
-              <span className="step-no">{i + 1}</span>
+              <span className="step-no">{step.no}</span>
               <h3>{step.title}</h3>
               <p>{step.body}</p>
             </article>
           ))}
         </div>
+
+        <p className="fine-print">
+          No card details are collected anywhere on this website. Payment happens
+          against an invoice, after I have confirmed the placement with you.
+        </p>
       </div>
     </section>
   );
 }
 
-export function TourSection() {
+/**
+ * Confirmed sponsors.
+ *
+ * Rendered from the database and from nothing else. Zero sponsors is a real
+ * state with its own copy, not something to be papered over with sample logos:
+ * a founder who spots an invented brand here stops believing the funding bar
+ * too, and rightly.
+ */
+export function ConfirmedSponsors({ sponsors }: { sponsors: PublicSponsor[] }) {
   return (
-    <section className="section" id="tour">
-      <div className="wrap">
+    <section className="section" id="sponsors">
+      <div className="wrap-mid">
         <div className="section-head">
-          <p className="section-kicker">The route</p>
+          <p className="section-kicker">Sponsors</p>
           <h2 className="h2" style={{ marginTop: 10 }}>
-            One case. Twelve cities.
+            {sponsors.length === 0 ? "Founding sponsor positions are open." : "On the case."}
           </h2>
           <p className="lede">
-            Twelve months on the road, starting in San Francisco. Your panel is on
-            the shell for the whole of it.
+            {sponsors.length === 0
+              ? "Nobody has confirmed yet — this section fills in as sponsorships are agreed, and it will only ever show real companies who have said we can name them."
+              : "Companies who have confirmed a sponsorship and agreed to be named here."}
           </p>
         </div>
 
-        <div className="tour-grid">
-          {TOUR.map((stop, i) => (
-            <article className="tour-stop" key={stop.city} data-flagship={!!stop.flagship}>
-              <span className="tnum">
-                {String(i + 1).padStart(2, "0")} · {stop.when}
-              </span>
-              <h4>{stop.city}</h4>
-              <small>{stop.event}</small>
-              {stop.flagship && <span className="tour-flag">First stop</span>}
-            </article>
-          ))}
+        {sponsors.length > 0 && (
+          <ul className="sponsor-grid">
+            {sponsors.map((sponsor) => (
+              <li className="sponsor" key={sponsor.name} data-tier={sponsor.tier}>
+                {sponsor.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- sponsor-supplied URL
+                  <img src={sponsor.logoUrl} alt={sponsor.name} />
+                ) : (
+                  <strong>{sponsor.name}</strong>
+                )}
+                <span className="sponsor-tier">{sponsor.tierLabel}</span>
+                {sponsor.url && (
+                  <a href={sponsor.url} target="_blank" rel="noopener noreferrer nofollow">
+                    Visit ›
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {sponsors.length === 0 && (
+          <div className="sponsor-empty">
+            <p>
+              The first company on the case gets the first line of the story I tell
+              about this trip.
+            </p>
+            <SponsorButton source="sponsors_empty">Take a founding spot</SponsorButton>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * What the money funds.
+ *
+ * Amounts are configuration and default to absent. With nothing costed the
+ * section shows the categories and says why there are no numbers, which is
+ * more convincing than five figures somebody made up in a text editor.
+ */
+export function Budget() {
+  return (
+    <section className="section" id="budget" style={{ background: "var(--surface)" }}>
+      <div className="wrap-mid">
+        <div className="section-head">
+          <p className="section-kicker">Where it goes</p>
+          <h2 className="h2" style={{ marginTop: 10 }}>
+            {BUDGET_COPY.title}
+          </h2>
+          <p className="lede">{BUDGET_COPY.body}</p>
         </div>
 
-        <p
-          style={{
-            maxWidth: "68ch",
-            margin: "26px auto 0",
-            textAlign: "center",
-            fontSize: 13,
-            lineHeight: 1.65,
-            color: "var(--ink-3)",
-          }}
-        >
-          The case attends these events as an attendee. CODEC is not sponsored by,
-          endorsed by, or affiliated with OpenAI, Anthropic, or any of the organisers
-          named above — you are buying space on a case that will be in those rooms,
-          not a place on anyone&rsquo;s official sponsor list.
-        </p>
+        <div className="budget-table">
+          {BUDGET.map((line) => (
+            <div key={line.label}>
+              <span>
+                <b>{line.label}</b>
+                <small>{line.note}</small>
+              </span>
+              {line.amountUsd !== null && (
+                <span className="budget-amount tnum">{formatUsd(line.amountUsd)}</span>
+              )}
+            </div>
+          ))}
+          {BUDGET_HAS_AMOUNTS && (
+            <div className="budget-total">
+              <span>
+                <b>Campaign goal</b>
+              </span>
+              <span className="budget-amount tnum">{formatUsd(CAMPAIGN_GOAL_USD)}</span>
+            </div>
+          )}
+        </div>
+
+        {!BUDGET_HAS_AMOUNTS && <p className="fine-print">{BUDGET_COPY.unpriced}</p>}
       </div>
     </section>
   );
@@ -169,7 +216,7 @@ export function TourSection() {
 
 export function FaqSection() {
   return (
-    <section className="section" id="faq" style={{ background: "var(--background)" }}>
+    <section className="section" id="faq">
       <div className="wrap-mid">
         <div className="section-head">
           <p className="section-kicker">Questions</p>
@@ -177,12 +224,7 @@ export function FaqSection() {
             The honest answers.
           </h2>
           <p className="lede">
-            Reserve floor across all {PLACEMENTS.length} panels is{" "}
-            {formatUsd(RESERVE_FLOOR_USD)}. Anything else, email{" "}
-            <a href={`mailto:${SITE.operator.email}`} className="link-blue">
-              {SITE.operator.email}
-            </a>
-            .
+            Anything not covered here — <ContactLink className="link-blue" />.
           </p>
         </div>
 
@@ -204,26 +246,83 @@ export function FaqSection() {
   );
 }
 
+export function Transparency() {
+  return (
+    <section className="section" id="independent" style={{ background: "var(--surface)" }}>
+      <div className="wrap-mid">
+        <div className="disclosure-card">
+          <p className="section-kicker">Transparency</p>
+          <h2 className="h2" style={{ marginTop: 10 }}>
+            {DISCLOSURE.title}
+          </h2>
+          {DISCLOSURE.paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+          <p className="disclosure-links">
+            <Link href="/terms">Terms</Link>
+            <span aria-hidden="true">·</span>
+            <Link href="/privacy">Privacy</Link>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function FinalCta() {
+  return (
+    <section className="section final-cta" id="sponsor">
+      <div className="wrap-mid">
+        <h2 className="h2">
+          A few companies help make the trip possible. I make sure their support is
+          visible and documented.
+        </h2>
+        <p className="lede">
+          {formatUsd(CAMPAIGN_GOAL_USD)} gets one developer from {TRIP.from} to{" "}
+          {TRIP.to} with a case that has your logo on it. Send your details and
+          I&rsquo;ll come back to you personally.
+        </p>
+        <div className="hero-actions">
+          <SponsorButton source="final_cta">Sponsor the trip</SponsorButton>
+          <a className="link-blue" href="#case">
+            See the placements ›
+          </a>
+        </div>
+        {CONTACT_EMAIL && (
+          <p className="final-cta-email">
+            Or just email me: <ContactLink className="link-blue" />
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export function SiteFooter() {
   return (
     <footer className="footer">
       <div className="footer-inner">
-        <h2>Twenty panels. Forty thousand kilometres.</h2>
-        <p>
-          Pick a face, pick a panel, and put your mark on a case that spends the next
-          year in the rooms you are trying to reach.
+        <p className="footer-mark">
+          {SITE.name} <span aria-hidden="true">·</span> {SITE.longAttribution}
         </p>
 
-        <a className="pill-blue" href="#inventory">
-          Get a panel
-        </a>
+        <div className="footer-links">
+          <Link href="/#sponsorship">Sponsorship</Link>
+          <Link href="/#case">The case</Link>
+          <Link href="/#founder">{FOUNDER.name}</Link>
+          <Link href="/#independent">Independence</Link>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+        </div>
 
         <p className="footer-fine">
-          {SITE.name} — {SITE.tagline} · Independent project, not sponsored by,
-          endorsed by, or affiliated with OpenAI, Anthropic, or any conference
-          organiser. All company names shown on unclaimed panels are placeholders.
+          {DISCLOSURE.footer}
           <br />
-          <a href={`mailto:${SITE.operator.email}`}>{SITE.operator.email}</a>
+          {CONTACT_EMAIL ? (
+            <ContactLink />
+          ) : (
+            <Link href="/#sponsorship">Contact through the sponsorship form</Link>
+          )}
         </p>
       </div>
     </footer>

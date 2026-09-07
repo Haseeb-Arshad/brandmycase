@@ -1,21 +1,33 @@
 import { LIVE_BID_STATUSES } from "@/lib/db";
 import { getSupabaseAdmin, type BidRow } from "@/lib/supabase";
-import {
-  PLACEMENTS,
-  GOAL_USD,
-  RESERVE_FLOOR_USD,
-  getPlacement,
-  type Placement,
-} from "@/data/placements";
+import { PLACEMENTS, getPlacement, type Placement } from "@/data/placements";
+import { internalIndexFor } from "@/data/internal-index";
 import { depositFor, minimumNextBid } from "@/lib/money";
 
 /**
- * The auction service.
+ * FUTURE / DISABLED IN THE FOUNDING EDITION.
  *
- * This is the only module that knows how a static panel plus a pile of bid rows
- * becomes "what the site shows". Both the page (server component) and the JSON
- * API call in here, so the rendered board and the API can never disagree.
+ * The auction service from the retired bid-and-deposit phase: it joins the
+ * static panel map to live bid rows. Nothing on the public Founding Edition
+ * site calls it. `/api/board` and `/api/bids` are the only callers left, and
+ * both refuse unless CAMPAIGN_MODE is explicitly `auction`.
+ *
+ * The Founding Edition board lives in `src/lib/placement-board.ts` and is
+ * static, moneyless and database-free. Keep it that way.
  */
+
+/**
+ * Sum of every internal index value. This was the retired auction's reserve
+ * floor. It lives here, in dormant code, rather than in the panel map, so
+ * there is no route by which a public component can render it.
+ */
+export const AUCTION_RESERVE_FLOOR_USD = PLACEMENTS.reduce(
+  (sum, p) => sum + internalIndexFor(p.id),
+  0,
+);
+
+/** The retired auction's campaign target. Not a Founding Edition number. */
+export const AUCTION_GOAL_USD = 500_000;
 
 export interface PanelState extends Placement {
   /** Highest live bid on this panel, or null if nobody has claimed it. */
@@ -94,7 +106,7 @@ export async function getAuctionBoard(): Promise<AuctionBoard> {
     const bids = byPlacement.get(placement.id) ?? [];
     const leader = bids[0] ?? null;
     const currentBidUsd = leader?.amount_usd ?? null;
-    const minimumBidUsd = minimumNextBid(placement.openingBidUsd, currentBidUsd);
+    const minimumBidUsd = minimumNextBid(internalIndexFor(placement.id), currentBidUsd);
 
     return {
       ...placement,
@@ -131,9 +143,9 @@ export async function getAuctionBoard(): Promise<AuctionBoard> {
     panels,
     stats: {
       raisedUsd,
-      goalUsd: GOAL_USD,
-      reserveFloorUsd: RESERVE_FLOOR_USD,
-      percentOfGoal: Math.round((raisedUsd / GOAL_USD) * 1000) / 10,
+      goalUsd: AUCTION_GOAL_USD,
+      reserveFloorUsd: AUCTION_RESERVE_FLOOR_USD,
+      percentOfGoal: Math.round((raisedUsd / AUCTION_GOAL_USD) * 1000) / 10,
       panelsTaken,
       panelsTotal: panels.length,
       bidsPlaced: liveBids.length,
@@ -158,7 +170,7 @@ export async function getPanelState(placementId: string): Promise<PanelState | n
 
   const leader = bids[0] ?? null;
   const currentBidUsd = leader?.amount_usd ?? null;
-  const minimumBidUsd = minimumNextBid(placement.openingBidUsd, currentBidUsd);
+  const minimumBidUsd = minimumNextBid(internalIndexFor(placement.id), currentBidUsd);
 
   return {
     ...placement,

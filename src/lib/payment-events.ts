@@ -1,6 +1,12 @@
 import { getSupabaseAdmin } from "@/lib/supabase";
 import type { SafepayWebhookEvent } from "@/lib/payments";
 
+/**
+ * FUTURE / DISABLED IN THE FOUNDING EDITION.
+ * The idempotency ledger for verified Safepay events. Reached only from the
+ * webhook route, which refuses unless CAMPAIGN_MODE=auction.
+ */
+
 export type PaymentWebhookStatus = "RECEIVED" | "PROCESSED" | "FAILED";
 export type PaymentWebhookAdmission = "NEW" | "RETRY" | "DUPLICATE";
 

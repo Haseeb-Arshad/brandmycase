@@ -1,4 +1,14 @@
-# Safepay integration plan
+# 11 — Safepay integration plan
+
+> **FUTURE / DISABLED.**
+>
+> The site takes no payment. This plan describes a possible later phase and
+> nothing in it is active. The payment mode resolves to `disabled` in every
+> environment while `CAMPAIGN_MODE` is `interest`, which is the default.
+>
+> Before treating any of this as current, read
+> [13 — Brand the Case](13-brand-the-case.md). The technical integration is the
+> easy half; the copy and the commercial claims are not.
 
 ## Current boundary
 
@@ -62,3 +72,13 @@ local development.
 - No raw PAN, CVV, or full card number storage.
 - No claim that live payouts or international cards work until Safepay has
   approved the account and a real end-to-end test passes.
+
+## Additional non-goals, added with the Founding Edition
+
+- No re-enabling of payments without first rewriting every public string that
+  currently states no payment is taken on this site.
+- No return of the retired auction's unsupported promises: twelve guaranteed
+  cities, insurance, a held reserve shell, guaranteed venue exposure,
+  guaranteed impressions. They were removed from the site deliberately.
+- No production deployment with `CAMPAIGN_MODE=auction` that has not first
+  passed a full sandbox settle-and-refund cycle on staging.

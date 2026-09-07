@@ -5,20 +5,21 @@ import { useFrame } from "@react-three/fiber";
 import type { ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { toWorld, CASE } from "@/data/placements";
-import type { PanelState } from "@/lib/auction";
+import { formatUsd } from "@/data/sponsorship";
+import type { PlacementState } from "@/lib/placement-board";
 import { createPanelTexture } from "@/components/three/panelTexture";
 
 /**
- * One brandable panel on the case.
+ * One placement on the case.
  *
  * The panel is a plane sitting `CASE.panelLift` proud of its face. On hover it
  * lifts a further 12mm along its own normal and swaps to the highlighted chip
- * texture — the 3D equivalent of the reference site's scale-on-hover slot.
+ * texture — the 3D equivalent of a card lifting under the cursor.
  */
 
 interface PanelProps {
-  panel: PanelState;
-  onSelect: (panel: PanelState) => void;
+  panel: PlacementState;
+  onSelect: (panel: PlacementState) => void;
   /** Set while the user is dragging the case, so a drag never fires a click. */
   suppressClick: React.RefObject<boolean>;
 }
@@ -31,12 +32,18 @@ export function Panel({ panel, onSelect, suppressClick }: PanelProps) {
 
   const { position, rotation } = useMemo(() => toWorld(panel), [panel]);
 
+  // The second line of the chip is the offer while a panel is open — tier and
+  // price, so the case itself answers "what does this cost?" — and the sponsor
+  // once it is taken. A sponsor's name appears only where they permitted it;
+  // otherwise the panel simply reads "Reserved".
   const chip = useMemo(
     () => ({
       slotId: panel.id,
-      sponsor: panel.sponsor,
-      amountUsd: panel.currentBidUsd ?? panel.openingBidUsd,
-      taken: panel.taken,
+      name: panel.name,
+      statusLabel: panel.available
+        ? `${panel.tierLabel} · ${formatUsd(panel.priceUsd)}`
+        : (panel.sponsor?.name ?? (panel.status === "SPONSORED" ? "Reserved" : panel.statusLabel)),
+      open: panel.available,
       w: panel.w,
       h: panel.h,
     }),
@@ -46,8 +53,8 @@ export function Panel({ panel, onSelect, suppressClick }: PanelProps) {
   const base = useMemo(() => createPanelTexture(chip, false), [chip]);
   const lit = useMemo(() => createPanelTexture(chip, true), [chip]);
 
-  // Canvas textures hold a full bitmap each; without this a board refresh after
-  // every bid would leak 40 of them on the GPU.
+  // Canvas textures hold a full bitmap each; without this a board change would
+  // leak 40 of them on the GPU.
   useEffect(() => {
     return () => {
       base.dispose();

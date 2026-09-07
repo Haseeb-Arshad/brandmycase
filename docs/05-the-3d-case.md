@@ -23,15 +23,45 @@ right side of the trade.
 
 | Part | Geometry | Notes |
 | --- | --- | --- |
-| Shell | `RoundedBox` 0.76 × 1.10 × 0.40, radius 0.055 | `meshPhysicalMaterial` with clearcoat — the moulded polycarbonate look |
-| Split frame | `RoundedBox`, +12 mm in X and Y, 22 mm thin in Z | Proud on the spines, lid and base; buried inside the front and back shells. This is why it reads as a rim band and not a stripe |
-| Corner bumpers | 8 × `RoundedBox` 0.13³, radius 0.045 | At `(±x, ±y, ±z)` |
-| TSA lock | `RoundedBox` on the lid front edge | |
-| Handle | 2 cylinders + a rounded crossbar at `z = -0.155` | Positioned clear of the lid panels — see below |
-| Wheels | 4 × housing + cylinder + hub cap | Axis along X so they read as spinner castors |
+| Clamshell halves | 2 × `RoundedBox` 0.76 × 1.10 × 0.20, radius 0.058, smoothness 8 | Front at `z = +0.10`, back at `z = -0.10`. Two halves rather than one box so the case reads as something that opens |
+| Shell surface | `meshPhysicalMaterial`, matte black, clearcoat 0.3, sheen | Carries the generated rib normal map and roughness map |
+| Zip seam | `RoundedBox`, +6 mm in X and Y, 26 mm thin in Z, at `z = 0` | Fills the groove between the halves; proud on the spines, lid and base, buried inside the front and back |
+| Zip pulls | 2 × small chrome `RoundedBox` on the right spine | |
+| Grab handles | 2 × recess + proud bar | One on the lid front edge, one low on the right spine — both placed to clear the panel map |
+| Telescoping handle | 2 chrome cylinders + mount plate + grip + release button, at `z = -0.155` | Positioned clear of the lid panels |
+| Wheels | 4 × plate + swivel yoke + **two** discs + hub caps | Dual spinner castors; the axle runs along X |
 
 `GROUND_Y` is exported so `CaseScene` can put the contact shadows exactly where
 the wheels touch down.
+
+## The moulded ribbing
+
+The single biggest contributor to the case reading as a real object is the
+diagonal ribbing moulded into the shell. It is generated, not painted on:
+`shellTexture.ts` builds a height field and converts it to a tangent-space
+normal map, plus a matching roughness map.
+
+```
+height(x, y) = ribProfile(((x + y) mod PERIOD) / PERIOD)
+```
+
+Because the height depends on `x + y`, lines of constant height run at 45
+degrees. Because it is a modulo of `PERIOD`, and the canvas size is a multiple
+of `PERIOD`, it **tiles seamlessly** — the Sobel pass that derives the normals
+wraps its kernel at the edges for the same reason. The rib cross-section is a
+raised cosine, so ribs have soft shoulders and rounded crowns like moulded
+plastic rather than hard square steps.
+
+Two details that matter:
+
+- the normal map is set to `THREE.NoColorSpace`. It is data, not colour — sRGB
+  decoding it would bend every normal
+- the roughness map varies only from 0.72 in the grooves to 0.58 on the crowns.
+  A wider swing reads as dirt, not moulding
+
+A near-black matte shell lit only from the front collapses into a silhouette, so
+`CaseScene` puts two rim lights behind the case. Those are what draw its edge
+against a white page and what make the ribbing legible as it turns.
 
 ## The coordinate system
 
@@ -113,7 +143,7 @@ fraction of the size a square panel can carry.
 
 Textures are built once per chip via `useMemo`, in a normal and a hovered
 variant, and **disposed on unmount** — each is a full bitmap on the GPU, and a
-board refresh after every bid would otherwise leak forty of them.
+board change would otherwise leak forty of them.
 
 ## The rotation model
 
@@ -155,12 +185,32 @@ several seconds does not snap the case round violently.
 | `←` `→` arrows | One quarter turn |
 | Segmented control | Jumps to a named face **the short way round** — the delta is wrapped into `[-2, 2]` quarter turns |
 | Drag | Free spin at 0.006 rad/px; on release, snaps to the nearest quarter turn |
-| Click a panel | Opens the bid modal |
+| Click a placement | Opens the placement request modal |
 | `Escape` | Closes the modal |
 
 Drag and click share a pointer, so a `suppressClick` ref is set once movement
 passes a 5 px threshold and cleared on the next tick — otherwise the pointer-up
 that ends a drag would also register as a click on whatever panel is underneath.
+
+### Never capture the pointer on the stage wrapper
+
+Drag is tracked with `pointermove` / `pointerup` listeners on `window`, and the
+wrapper deliberately does **not** call `setPointerCapture`.
+
+This is not a style preference. Pointer capture redirects every subsequent
+pointer event for that pointer id to the capturing element. Capturing on the
+wrapper therefore stops the `<canvas>` inside it from ever seeing `pointerup` —
+and react-three-fiber only fires `onClick` when it observes `pointerdown` **and**
+`pointerup` on the same object. The result is a stage that rotates perfectly and
+silently ignores every single panel click, with nothing in the console.
+
+This is a real bug that shipped and was fixed. If you reintroduce pointer
+capture here, every panel becomes unclickable.
+
+`tests/` cannot cover this — the click path runs through a WebGL raycast, so a
+synthetic DOM event never reaches it. It is verified by driving real pointer
+input through the DevTools protocol (`Input.dispatchMouseEvent`) and asserting
+`.request-modal` appears.
 
 ## Lighting
 

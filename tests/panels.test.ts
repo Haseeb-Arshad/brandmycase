@@ -5,15 +5,20 @@ import {
   toWorld,
   placementsOnFace,
   ROTATABLE_FACES,
-  RESERVE_FLOOR_USD,
   type Placement,
 } from "@/data/placements";
+import { buildPlacementBoard, resolvePlacement } from "@/lib/placement-board";
+import type { ConfirmedSponsorship } from "@/lib/funding";
 
 /**
- * The panel map is sold, rendered, and fabricated from one file, so these tests
- * guard the things that would be expensive to get wrong: a panel hanging off
- * the edge of the shell, two panels overlapping, or an id changing after it has
- * been quoted to a sponsor.
+ * The panel map is offered, rendered and fabricated from one file, so these
+ * tests guard the things that would be expensive to get wrong: a panel hanging
+ * off the edge of the shell, two panels overlapping, or an id changing after it
+ * has been quoted to a sponsor.
+ *
+ * They also guard a commercial promise: the campaign invents no sponsors, so
+ * the board that reaches the browser must carry no company name that did not
+ * come from a confirmed row with permission attached.
  */
 
 /** Half-extents of a face, in the face's own (u, v) coordinates. */
@@ -78,18 +83,28 @@ describe("panel map", () => {
     }
   });
 
-  it("prices every panel above zero and states a print size", () => {
+  it("states a print size for every placement", () => {
     for (const p of PLACEMENTS) {
-      expect(p.openingBidUsd).toBeGreaterThan(0);
-      expect(Number.isInteger(p.openingBidUsd)).toBe(true);
       expect(p.sizeLabel).toMatch(/^\d+ x \d+ cm$/);
     }
   });
 
-  it("sums opening bids into the published reserve floor", () => {
-    const sum = PLACEMENTS.reduce((t, p) => t + p.openingBidUsd, 0);
-    expect(RESERVE_FLOOR_USD).toBe(sum);
-    expect(sum).toBe(327_000);
+  it("ships with no placement held back and none claimed", () => {
+    // A panel is only ever taken because a confirmed sponsorship says so. A
+    // HELD panel checked into the repository would be a placement removed from
+    // sale for no recorded reason.
+    for (const p of PLACEMENTS) {
+      expect(p.hold, `placement ${p.id} is held with no sponsorship behind it`).toBe(
+        "OPEN",
+      );
+    }
+  });
+
+  it("names no company anywhere in the panel map", () => {
+    // This file is compiled into the browser bundle. Sponsor identity belongs
+    // to the database, only for confirmed rows, and only with permission.
+    const json = JSON.stringify(PLACEMENTS);
+    expect(json).not.toMatch(/sponsor|company|logo/i);
   });
 });
 
@@ -129,5 +144,114 @@ describe("toWorld", () => {
     for (const face of ROTATABLE_FACES) {
       expect(toWorld({ face, u: 0, v: 0.3 }).position[1]).toBe(0.3);
     }
+  });
+});
+
+const confirmed = (over: Partial<ConfirmedSponsorship> = {}): ConfirmedSponsorship => ({
+  id: "row-1",
+  placementId: "02",
+  tier: "ANCHOR",
+  amountUsd: 1000,
+  displayName: null,
+  displayLogoUrl: null,
+  companyUrl: null,
+  displayPermission: false,
+  confirmedAt: "2026-09-01T00:00:00Z",
+  ...over,
+});
+
+describe("the placement board", () => {
+  it("exposes every placement, in panel-map order, with a tier and a price", () => {
+    const board = buildPlacementBoard([]);
+    expect(board.placements.map((p) => p.id)).toEqual(PLACEMENTS.map((p) => p.id));
+    expect(board.stats.total).toBe(20);
+    expect(board.stats.faces).toBe(5);
+    expect(board.stats.available).toBe(20);
+
+    for (const placement of board.placements) {
+      expect(placement.tier, `placement ${placement.id} has no tier`).toBeTruthy();
+      expect(placement.priceUsd, `placement ${placement.id} has no price`).toBeGreaterThan(
+        0,
+      );
+    }
+  });
+
+  it("marks a panel sponsored when — and only when — a confirmed row claims it", () => {
+    const board = buildPlacementBoard([confirmed()]);
+    const anchor = board.placements.find((p) => p.id === "02")!;
+
+    expect(anchor.status).toBe("SPONSORED");
+    expect(anchor.available).toBe(false);
+    expect(board.stats.sponsored).toBe(1);
+    expect(board.stats.available).toBe(19);
+
+    // Every other panel is untouched by somebody else's sponsorship.
+    for (const other of board.placements.filter((p) => p.id !== "02")) {
+      expect(other.available, `panel ${other.id} was taken out with panel 02`).toBe(true);
+    }
+  });
+
+  it("shows a sponsor's name only where they gave permission", () => {
+    const withoutPermission = buildPlacementBoard([
+      confirmed({ displayName: "Northbeam Labs", displayPermission: false }),
+    ]).placements.find((p) => p.id === "02")!;
+
+    expect(withoutPermission.sponsor).toBeNull();
+    expect(withoutPermission.statusLabel).toBeTruthy();
+    expect(JSON.stringify(withoutPermission)).not.toContain("Northbeam");
+
+    const withPermission = buildPlacementBoard([
+      confirmed({ displayName: "Northbeam Labs", displayPermission: true }),
+    ]).placements.find((p) => p.id === "02")!;
+
+    expect(withPermission.sponsor?.name).toBe("Northbeam Labs");
+  });
+
+  it("counts a tier-only sponsorship toward nothing on the board", () => {
+    // Somebody can sponsor a tier without naming a panel. It funds the trip;
+    // it does not silently take a placement off the market.
+    const board = buildPlacementBoard([confirmed({ placementId: null })]);
+    expect(board.stats.available).toBe(20);
+    expect(board.stats.sponsored).toBe(0);
+  });
+
+  it("reports per-tier availability that matches the panels", () => {
+    const board = buildPlacementBoard([confirmed()]);
+    const anchor = board.tiers.find((t) => t.id === "ANCHOR")!;
+
+    expect(anchor.total).toBe(1);
+    expect(anchor.available).toBe(0);
+
+    for (const tier of board.tiers) {
+      const panels = board.placements.filter((p) => p.tier === tier.id);
+      expect(tier.total, `tier ${tier.id} miscounts its panels`).toBe(panels.length);
+      expect(tier.available, `tier ${tier.id} miscounts availability`).toBe(
+        panels.filter((p) => p.available).length,
+      );
+    }
+  });
+
+  it("puts no private inquiry data on the wire", () => {
+    // Serialising is the real test: it catches a field added upstream and
+    // spread into PlacementState by accident, which a key-by-key check would
+    // not. Nothing a company typed into the form may reach the browser.
+    const json = JSON.stringify(
+      buildPlacementBoard([
+        confirmed({
+          displayName: "Northbeam Labs",
+          displayPermission: true,
+          companyUrl: "https://northbeam.example",
+        }),
+      ]),
+    );
+
+    expect(json).not.toMatch(/contact_email|contactEmail|@|message|INTERESTED|INVOICED/i);
+    expect(json).not.toMatch(/amountUsd|amount_usd/);
+  });
+
+  it("resolves a known placement and refuses an unknown one", () => {
+    expect(resolvePlacement("01")?.name).toBe("The Crown");
+    expect(resolvePlacement("99")).toBeNull();
+    expect(resolvePlacement("")).toBeNull();
   });
 });

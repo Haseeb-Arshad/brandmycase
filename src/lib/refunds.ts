@@ -1,9 +1,14 @@
-import {
-  PAYMENTS_MODE,
-  refundSafepayPayment,
-} from "@/lib/payments";
+import { PAYMENT_MODE, refundSafepayPayment } from "@/lib/payments";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { toPaymentAmount } from "@/lib/money";
+
+/**
+ * FUTURE / DISABLED IN THE FOUNDING EDITION.
+ *
+ * Deposit-refund processing for the retired auction. Only the Safepay webhook
+ * calls into it, and that route refuses unless CAMPAIGN_MODE=auction with live
+ * credentials, so nothing here runs on the Founding Edition site.
+ */
 
 export interface OutbidBid {
   id: string;
@@ -52,7 +57,7 @@ export async function requestDepositRefund(bidId: string): Promise<void> {
 
   try {
     let refundRef: string | null = null;
-    if (PAYMENTS_MODE === "mock") {
+    if (PAYMENT_MODE === "mock") {
       refundRef = `mock_ref_${bidId}`;
     } else {
       if (bid.payment_provider !== "safepay") {
@@ -68,11 +73,11 @@ export async function requestDepositRefund(bidId: string): Promise<void> {
     const { error } = await getSupabaseAdmin()
       .from("bids")
       .update({
-        refund_status: PAYMENTS_MODE === "mock" ? "SUCCEEDED" : "PROCESSING",
+        refund_status: PAYMENT_MODE === "mock" ? "SUCCEEDED" : "PROCESSING",
         refund_ref: refundRef,
         refund_amount_minor: amountMinor,
         refund_error: null,
-        refunded_at: PAYMENTS_MODE === "mock" ? requestedAt : null,
+        refunded_at: PAYMENT_MODE === "mock" ? requestedAt : null,
       })
       .eq("id", bidId);
     if (error) throw new Error(`Supabase refund result update failed: ${error.message}`);

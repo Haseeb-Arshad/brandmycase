@@ -1,39 +1,47 @@
 # 02 — Architecture
 
+> **Partly superseded.** The stack, the rendering strategy and the module
+> boundaries below still hold. Two things have changed: the homepage is now
+> rendered per request (it reads confirmed sponsorships from Supabase) rather
+> than prerendered from static configuration, and the offer lives in
+> `src/data/sponsorship.ts` alongside the panel map. See
+> [13 — Brand the Case](13-brand-the-case.md).
+
 ## Stack
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Framework | Next.js 15, App Router | Server components mean the board is rendered with real bids in the first paint |
-| Language | TypeScript, `strict` | The panel map is the contract; types enforce it |
+| Framework | Next.js 15, App Router | The homepage is a server component with no data dependency, so it prerenders to static output |
+| Language | TypeScript, `strict` | The placement map is the contract; types enforce it |
 | 3D | three.js + React Three Fiber 9 + drei 10 | R3F 9 pairs with React 19 |
-| Database | Supabase Postgres via `@supabase/server` | Server-only client; live bids stay in the hosted database |
-| Payments | Safepay Hosted Checkout, with a mock backend | Pakistan-compatible provider boundary with signed webhooks and refunds |
+| Database | Supabase Postgres via `@supabase/server` | Server-only client. One table: sponsorship requests |
+| Payments | *none* | The Founding Edition takes no payment. Safepay exists as dormant infrastructure — see [06](06-payments.md) |
 | Validation | Zod | One schema per endpoint, parsed before anything touches the database |
 | Styling | One hand-written CSS file | The design system is ~40 tokens and ~60 components; a utility framework would be more machinery than the problem needs |
-| Tests | Vitest | Geometry and money rules |
+| Tests | Vitest | Geometry, request validation, and the payment-disabling matrix |
 
 ## Rendering strategy
 
-The page is mostly server-rendered. Only three components ship JavaScript for
-auction state, and one more for the 3D.
+The page is mostly server-rendered. Three components ship JavaScript, and only
+because they need pointer interaction.
 
 ```
-app/page.tsx                      SERVER  reads the board via getAuctionBoard()
-└── AuctionProvider               CLIENT  holds board state, hosts the modal
+app/page.tsx                      SERVER  getPlacementBoard() — static, no DB
+└── CampaignProvider              CLIENT  holds the board, hosts the modal
     ├── Nav                       SERVER  (passed through as children)
-    ├── CaseHero                  CLIENT  needs live stats + the countdown
+    ├── CaseHero                  CLIENT  reads board stats, wraps the stage
     │   └── CaseStage             CLIENT  rotation, drag, face switcher
     │       └── CaseCanvas        CLIENT  dynamic(ssr:false) — three.js
-    ├── StatsStrip / Story /      SERVER  static editorial, zero JS
-    │   TourSection / HowItWorks /
-    │   FaqSection / SiteFooter
-    ├── InventorySection          CLIENT  filtering + click-to-bid
-    └── TickerSection             CLIENT  reads recent bids
+    ├── TrustStrip / Story /      SERVER  static editorial, zero JS
+    │   HowItWorks / FoundingSponsors /
+    │   FoundingEdition / PlannedRoute /
+    │   WhatItFunds / ArtworkSection /
+    │   Transparency / FaqSection / SiteFooter
+    └── InventorySection          CLIENT  filtering + click-to-request
 ```
 
 Server components can be children of a client provider, so the editorial
-sections stay on the server even though they sit inside `AuctionProvider` in
+sections stay on the server even though they sit inside `CampaignProvider` in
 the tree. That is why the initial JS bundle is ~103 kB and three.js is not in
 it at all.
 
@@ -41,84 +49,102 @@ it at all.
 module scope and cannot be evaluated on the server. `CaseCanvas` exists purely
 as the split point; `CaseStage` renders a placeholder until it loads.
 
-## Request flow: placing a bid
+## The board is static
+
+`getPlacementBoard()` in `src/lib/placement-board.ts` derives the whole board
+synchronously from `src/data/placements.ts`. There is no query, no refetch, no
+polling and no JSON endpoint for it.
+
+That is a safety property as much as a performance one. There is no code path
+on the public site that can return a sponsor, a price or an amount, because
+there is no code path that returns anything but static configuration. The
+homepage renders correctly before Supabase is even provisioned.
+
+`PlacementState` — the shape that reaches the browser — carries only id, code,
+name, face, description, size label, tier, status and geometry. No monetary
+field exists on it, and `tests/panels.test.ts` serialises the board to prove
+one cannot be added by accident.
+
+Moving availability into Supabase later means making one function async.
+Nothing above it changes.
+
+## Request flow: a placement request
 
 ```
-Browser                    POST /api/bids
-                             │
-                             ├─ 1. bidSchema.safeParse(body)          422 on failure
-                             │
-                             ├─ 2. getPanelState(placementId)         re-read live state
-                             │       (never trust a price from the client)
-                             │
-                             ├─ 3. amount < minimumBidUsd ?           409 with the new floor
-                             │
-                             ├─ 4. Supabase bids.insert({ PENDING })   holds no claim yet
-                             │
-                             ├─ 5. createDepositSession(...)
-                             │       ├── live: Safepay Hosted Checkout tracker
-                             │       └── mock: local reference
-                             │
-                             │      on mock failure: delete the bid, 502
-                             │      live failure: retain it for webhook reconciliation
-                             │
-                             └─ 6. mock  → settleDeposit() inline
-                                   live  → store tracker, wait for the Safepay webhook
+Browser              POST /api/sponsorship-requests
+                       │
+                       ├─ 1. rateLimit(clientKey)                429 + Retry-After
+                       │      in-process speed bump, not a security boundary
+                       │
+                       ├─ 2. sponsorshipRequestSchema.safeParse  422 with `fields`
+                       │      · placement id must be in the panel map
+                       │      · budget must be one of six bands
+                       │      · acknowledgement checkbox must be true
+                       │      · honeypot must be empty
+                       │      · every string length-capped
+                       │
+                       ├─ 3. getPlacementState(id)               404 unknown
+                       │      re-checked server-side; not requestable → 409
+                       │
+                       ├─ 4. per-email window (Supabase)         429 over the cap
+                       │      same email + same placement → treated as received
+                       │
+                       └─ 5. insert one row, status NEW
 
-                     201 { bidId, depositUsd, mode, redirectUrl }
+               201 { received: true, paymentTaken: false, reserved: false, id }
 ```
 
-The bid becomes live only in `settleDeposit()`, which runs in a transaction:
-the new bid is marked `DEPOSIT_PAID` and every lower live bid on that panel is
-marked `OUTBID` in the same commit. Without the transaction the board could
-briefly show two live leaders on one panel.
+Nothing in this flow charges anything, and nothing in it changes what the
+public board says is available. Those two properties are the product.
 
-In live mode the only caller of `settleDeposit()` is the Safepay webhook, after
-signature verification. Nothing in a URL can promote a bid.
+Zod strips unknown keys, so a client cannot smuggle an amount into the row even
+by sending one — `tests/sponsorship.test.ts` asserts it.
 
-## Request flow: reading the board
+## The disabled payment surface
 
-`getAuctionBoard()` in `src/lib/auction.ts` is the single place that turns
-"twenty static panels + a pile of bid rows" into what the site shows. It runs
-two queries and folds the result in memory:
+`CAMPAIGN_MODE` (default `interest`) is read in one place,
+`src/lib/campaign.ts`, and everything else derives from it:
 
-1. every live bid, ordered by amount descending
-2. the eight most recent live bids, for the ticker
+- `/api/bids` answers **404** before reading the body or touching Supabase
+- `/api/board` answers **404**
+- `/success` calls `notFound()`
+- `/api/webhooks/safepay` answers **503** and settles nothing
+- `resolvePaymentMode()` returns `disabled` regardless of credentials
 
-then maps `PLACEMENTS` over the grouped bids. Because it iterates `PLACEMENTS`,
-panel order is stable and identical to the order the 3D scene indexes against.
+`resolvePaymentMode()` is a pure function so the matrix can be swept
+exhaustively in `tests/campaign.test.ts` rather than asserted in a comment, and
+`tests/api-guards.test.ts` invokes the route handlers themselves so a guard
+cannot be removed while unit tests stay green. The full matrix is in
+[12 — Founding Edition launch](12-founding-edition-launch.md).
 
-Both `app/page.tsx` (server render) and `GET /api/board` (client refetch) call
-this same function, so the rendered board and the API can never disagree.
+## Why placements are not in the database
 
-## Why panels are not in the database
-
-The twenty panels are physical areas on a real shell. They do not change
+The twenty placements are physical areas on a real shell. They do not change
 because a user did something; they change because someone redesigns the case,
-which is a code change with a migration-free deploy. Modelling them as rows
-would mean:
+which is a code change. Modelling them as rows would mean:
 
 - the 3D scene waiting on a query to know where to draw
 - geometry drifting from what was quoted, silently
 - no type safety on `placementId` anywhere
 
 As typed constants they are validated at build time, checked by
-`tests/panels.test.ts`, and `z.enum(placementIds)` rejects an unknown panel at
-the API boundary for free.
+`tests/panels.test.ts`, and `z.enum(placementIds)` rejects an unknown placement
+at the API boundary for free.
 
 ## Error handling posture
 
-- **422** — the body failed validation. Response carries `fields` keyed by
-  input name, which the modal renders inline.
-- **409** — the bid was valid but is now below the panel's minimum. Response
-  carries `minimumBidUsd`; the modal updates the figure in place rather than
-  silently accepting a losing bid.
-- **502** — the payment provider could not open a session. The pending bid is
-  deleted first.
-- **400 / 503** on the webhook — bad signature, or Safepay not configured.
+| Status | When |
+| --- | --- |
+| **422** | Body failed validation. Carries `fields` keyed by input name, which the modal renders inline and wires to each input with `aria-describedby` |
+| **429** | Client throttle, or too many requests from one email address. Carries `Retry-After` |
+| **409** | The placement exists but is no longer open to requests |
+| **404** | Unknown placement — or any retired auction endpoint, in the shipped configuration |
+| **503** | Supabase could not record the request |
 
-A failed board refresh is deliberately swallowed: the board on screen is still
-valid, just seconds stale, and an error toast would be noise.
+A repeat request for the same placement from the same address inside the window
+is answered as **received**, not as an error: it is almost always a double
+submit, and an error screen there would read as a failure when the request is
+already safely stored.
 
 ---
 

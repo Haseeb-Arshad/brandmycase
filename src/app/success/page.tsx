@@ -1,16 +1,19 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getSupabaseAdmin, type BidRow } from "@/lib/supabase";
 import { getPlacement } from "@/data/placements";
 import { formatUsd } from "@/lib/money";
+import { auctionEndpointsEnabled } from "@/lib/campaign";
 import { Nav } from "@/components/Nav";
 
 /**
- * Where Safepay Hosted Checkout returns to.
+ * FUTURE / DISABLED IN THE FOUNDING EDITION.
  *
- * The bid may still be PENDING when the browser lands here — the webhook and
- * the redirect race, and the webhook is the one that counts. So this page never
- * claims the panel is won; it confirms what was received and says what happens
- * next, which is true in both orderings.
+ * Where Safepay Hosted Checkout returned to during the retired auction. The
+ * Founding Edition takes no payment, so there is no checkout to come back
+ * from: the route 404s unless CAMPAIGN_MODE is explicitly `auction`. Leaving
+ * a page that says "deposit received" reachable on an inquiry-only site is
+ * exactly the kind of thing this rebuild exists to prevent.
  */
 export const dynamic = "force-dynamic";
 
@@ -19,6 +22,8 @@ export default async function SuccessPage({
 }: {
   searchParams: Promise<{ bid?: string }>;
 }) {
+  if (!auctionEndpointsEnabled()) notFound();
+
   const { bid: bidId } = await searchParams;
   const bidResult = bidId
     ? await getSupabaseAdmin()
@@ -54,7 +59,7 @@ export default async function SuccessPage({
           <p className="section-kicker">
             {depositConfirmed ? "Deposit received" : "Payment being confirmed"}
           </p>
-          <h1 style={{ marginTop: 12 }}>You&rsquo;re on the case.</h1>
+          <h1 style={{ marginTop: 12 }}>Payment received.</h1>
 
           {bid && panel ? (
             <p className="lede" style={{ marginTop: 18 }}>
@@ -68,35 +73,22 @@ export default async function SuccessPage({
                 </>
               ) : (
                 <>
-                  We&rsquo;ve received your checkout return and are waiting for Safepay
-                  to confirm the {formatUsd(bid.deposit_usd)} deposit. We&rsquo;ll use{" "}
-                  {bid.contact_email} to follow up as soon as it is confirmed.
+                  We&rsquo;ve received your checkout return and are waiting for the
+                  provider to confirm the {formatUsd(bid.deposit_usd)} deposit.
+                  We&rsquo;ll use {bid.contact_email} to follow up as soon as it is
+                  confirmed.
                 </>
               )}
             </p>
           ) : (
             <p className="lede" style={{ marginTop: 18 }}>
-              Your checkout return was received. Safepay is confirming the payment,
-              and our team will follow up using the contact address you gave.
+              Your checkout return was received. The provider is confirming the
+              payment, and we will follow up using the contact address you gave.
             </p>
           )}
 
-          <p
-            style={{
-              maxWidth: "56ch",
-              margin: "18px auto 0",
-              fontSize: 13,
-              lineHeight: 1.65,
-              color: "var(--ink-3)",
-            }}
-          >
-            If you are outbid before the auction closes, the deposit is refunded in
-            full and automatically. The balance is only charged once the auction
-            closes in your favour and you have approved the proof.
-          </p>
-
           <Link className="pill-blue" href="/#inventory" style={{ marginTop: 30 }}>
-            Back to the auction
+            Back to the case
           </Link>
         </div>
       </main>

@@ -3,11 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { ROTATABLE_FACES, FACE_LABELS, type Face } from "@/data/placements";
-import { useAuction } from "@/components/AuctionProvider";
+import { useCampaign } from "@/components/CampaignProvider";
+import type { PlacementState } from "@/lib/placement-board";
+import { track } from "@/lib/analytics";
 
 /**
  * The interactive stage: the case in its product card, plus the segmented face
  * switcher underneath.
+ *
+ * The 3D is dynamically imported and never blocks the story above it: the page
+ * headline, the offer and the form are all usable before a single byte of
+ * three.js arrives, and every panel here is also reachable as an ordinary
+ * button in the grid below.
  *
  * ANGLE MODEL
  * -----------
@@ -38,7 +45,7 @@ function faceFromAngle(angle: number): Face {
 }
 
 export function CaseStage() {
-  const { panels, selectPanel } = useAuction();
+  const { placements, openSponsorForm } = useCampaign();
 
   const targetAngle = useRef(0);
   const suppressClick = useRef(false);
@@ -48,6 +55,28 @@ export function CaseStage() {
   const dragStartAngle = useRef(0);
   const dragging = useRef(false);
   const dragDistance = useRef(0);
+
+  /**
+   * Selecting a panel opens the sponsorship form with that panel and its tier
+   * already chosen. A panel that is already sponsored carries its tier through
+   * but not itself, so nobody is invited to buy something that is gone.
+   */
+  const onSelect = useCallback(
+    (panel: PlacementState) => {
+      track("select_panel", {
+        panel: panel.id,
+        tier: panel.tier,
+        available: panel.available,
+        source: "case",
+      });
+      openSponsorForm({
+        source: "case",
+        tier: panel.tier,
+        placement: panel.available ? panel : null,
+      });
+    },
+    [openSponsorForm],
+  );
 
   /** dir = 1 turns right (reveals the next face clockwise), -1 turns left. */
   const turn = useCallback((dir: 1 | -1) => {
@@ -73,37 +102,53 @@ export function CaseStage() {
     dragDistance.current = 0;
     dragStartX.current = e.clientX;
     dragStartAngle.current = targetAngle.current;
-    e.currentTarget.setPointerCapture(e.pointerId);
+
+    // Deliberately NO setPointerCapture here. Capturing on this wrapper would
+    // divert every following pointer event to the wrapper, so the <canvas>
+    // inside it would never see pointerup — and react-three-fiber only fires
+    // onClick when it sees pointerdown AND pointerup on the same object. That
+    // silently kills every panel click. The window listeners below give us the
+    // drag without stealing events from the canvas.
   };
 
-  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
-    const dx = e.clientX - dragStartX.current;
-    dragDistance.current = Math.max(dragDistance.current, Math.abs(dx));
-    // Dragging right swings the front face rightwards, revealing the left spine.
-    targetAngle.current = dragStartAngle.current + dx * DRAG_SENSITIVITY;
-    if (dragDistance.current > DRAG_THRESHOLD) suppressClick.current = true;
-  };
+  // Drag is tracked on the window so it keeps working when the pointer leaves
+  // the stage, without capturing the pointer away from the canvas.
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - dragStartX.current;
+      dragDistance.current = Math.max(dragDistance.current, Math.abs(dx));
+      // Dragging right swings the front face rightwards, revealing the left spine.
+      targetAngle.current = dragStartAngle.current + dx * DRAG_SENSITIVITY;
+      if (dragDistance.current > DRAG_THRESHOLD) suppressClick.current = true;
+    };
 
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
+    const onUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
 
-    if (dragDistance.current > DRAG_THRESHOLD) {
-      // Settle on the nearest face rather than leaving the case at an angle.
-      targetAngle.current = Math.round(targetAngle.current / QUARTER) * QUARTER;
-      setFace(faceFromAngle(targetAngle.current));
-      // Let the click that ends this drag pass by before re-arming panels.
-      setTimeout(() => {
+      if (dragDistance.current > DRAG_THRESHOLD) {
+        // Settle on the nearest face rather than leaving the case at an angle.
+        targetAngle.current = Math.round(targetAngle.current / QUARTER) * QUARTER;
+        setFace(faceFromAngle(targetAngle.current));
+        // Let the click that ends this drag pass by before re-arming panels.
+        setTimeout(() => {
+          suppressClick.current = false;
+        }, 0);
+      } else {
         suppressClick.current = false;
-      }, 0);
-    } else {
-      suppressClick.current = false;
-    }
-  };
+      }
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -116,27 +161,20 @@ export function CaseStage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [turn]);
 
-  const onThisFace = panels.filter((p) => p.face === face);
-  const openHere = onThisFace.filter((p) => !p.taken).length;
+  const onThisFace = placements.filter((p) => p.face === face);
+  const openHere = onThisFace.filter((p) => p.available).length;
 
   return (
     <>
       <div className="case-card">
-        <div
-          className="case-stage"
-          id="case"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-        >
+        <div className="case-stage" onPointerDown={onPointerDown}>
           <CaseCanvas
-            panels={panels}
+            panels={placements}
             targetAngle={targetAngle}
             suppressClick={suppressClick}
-            onSelect={selectPanel}
+            onSelect={onSelect}
           />
-          <p className="stage-badge">CODEC ONE · 20 panels</p>
+          <p className="stage-badge">One case · 20 placements</p>
         </div>
       </div>
 
@@ -147,11 +185,7 @@ export function CaseStage() {
 
         <div className="segmented" role="group" aria-label="Choose a face">
           {ROTATABLE_FACES.map((f) => (
-            <button
-              key={f}
-              aria-pressed={f === face}
-              onClick={() => goToFace(f)}
-            >
+            <button key={f} aria-pressed={f === face} onClick={() => goToFace(f)}>
               {FACE_LABELS[f]}
             </button>
           ))}
@@ -163,9 +197,9 @@ export function CaseStage() {
       </div>
 
       <p className="stage-hint" aria-live="polite">
-        Drag to spin · tap any panel to place a bid ·{" "}
+        Drag to spin · tap a panel to sponsor it ·{" "}
         <b>
-          {onThisFace.length} panels here, {openHere} open
+          {onThisFace.length} placements here, {openHere} open
         </b>
       </p>
     </>

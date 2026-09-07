@@ -1,8 +1,8 @@
 {
-  "name": "codec-brand-the-case",
-  "version": "1.0.0",
+  "name": "brand-the-case",
+  "version": "2.0.0",
   "private": true,
-  "description": "CODEC — a 3D sponsorship auction for the physical panels of a travelling hardshell case.",
+  "description": "Brand the Case \u2014 an independent travel sponsorship project by Haseeb Arshad: physical brand placements on the case going to OpenAI DevDay. Not affiliated with OpenAI.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +12,8 @@
     "db:migrate": "npx supabase db push",
     "setup": "npm run db:migrate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "preflight": "node scripts/preflight.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.0.4",

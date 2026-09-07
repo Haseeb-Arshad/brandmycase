@@ -1,5 +1,11 @@
 # 07 — Design system
 
+> **Still current.** The tokens, type scale and component idiom below are
+> unchanged. The campaign added components this document does not list — the
+> funding bar, the founder card, the proof card, the package cards, the tier
+> chooser, the sponsor grid and the budget table — all in the same file and the
+> same idiom. See [13 — Brand the Case](13-brand-the-case.md).
+
 The UI follows [brandmymac.com](https://brandmymac.com). The tokens below are
 the values that site ships, read from its stylesheet; the rest is the same
 Apple-flavoured idiom applied to this product's components.
@@ -24,7 +30,7 @@ less than the machinery a framework would add.
 
 --ease-out: cubic-bezier(0, 0, 0.2, 1);
 --nav-h: 52px;
---wide:   1152px;   /* nav, tour grid, inventory   */
+--wide:   1152px;   /* nav, route grid, inventory  */
 --mid:    1024px;   /* hero, prose sections        */
 --narrow:  720px;   /* FAQ, ticker                 */
 ```
@@ -58,7 +64,7 @@ CSS.
 | Fine print | 11–12px | 400 | — |
 
 The display sizes carry a strong negative tracking; body copy carries none. Add
-`.tnum` to anything numeric that updates in place — funding totals, bid amounts,
+`.tnum` to anything numeric that sits in a column or updates in place — placement numbers, counts,
 countdowns — so digits do not jitter.
 
 ## Component patterns

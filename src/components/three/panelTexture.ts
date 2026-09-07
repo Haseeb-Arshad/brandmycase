@@ -3,14 +3,16 @@ import * as THREE from "three";
 /**
  * Panel chip textures.
  *
- * Every brandable panel on the case is a plane wearing a canvas texture drawn
- * here. Drawing the chip rather than overlaying HTML means the labels are
- * genuinely part of the 3D scene: they rotate, catch light, and go round the
- * back with the case, and there is no second coordinate system to keep in sync.
+ * Every placement on the case is a plane wearing a canvas texture drawn here.
+ * Drawing the chip rather than overlaying HTML means the labels are genuinely
+ * part of the 3D scene: they rotate, catch light, and go round the back with
+ * the case, and there is no second coordinate system to keep in sync.
  *
- * The chip is the reference site's spot card, redrawn in canvas: a white
- * rounded panel, a hairline border (dashed and green while the panel is still
- * available), the company name, and the price beneath it.
+ * The chip carries the placement's number, its name, and one line underneath:
+ * the tier and price while it is open, the sponsor once it is taken. The
+ * caller decides what that line says (see `Panel.tsx`) — this module draws
+ * whatever it is handed and knows nothing about sponsorship rules, which is
+ * why a sponsor's name can never appear here without permission upstream.
  */
 
 const INK = "#1d1d1f";
@@ -26,26 +28,15 @@ const MAX_DIM = 2048;
 
 export interface PanelChip {
   slotId: string;
-  /** Company holding the panel, or null when it is still open. */
-  sponsor: string | null;
-  /** Amount to show as the price. */
-  amountUsd: number;
-  taken: boolean;
+  /** The placement's own name, e.g. "The Crown". */
+  name: string;
+  /** Short availability word drawn under the name. */
+  statusLabel: string;
+  /** Can this placement still be requested? Drives the dashed green outline. */
+  open: boolean;
   /** Panel size in metres, used for aspect and text fitting. */
   w: number;
   h: number;
-}
-
-function compact(amountUsd: number): string {
-  if (amountUsd >= 1_000_000) {
-    const m = amountUsd / 1_000_000;
-    return "$" + (m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)) + "M";
-  }
-  if (amountUsd >= 1000) {
-    const k = amountUsd / 1000;
-    return "$" + (k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)) + "K";
-  }
-  return "$" + amountUsd;
 }
 
 const font = (weight: number, size: number) =>
@@ -172,17 +163,17 @@ export function createPanelTexture(chip: PanelChip, hovered = false): THREE.Canv
   roundRect(ctx, stroke, stroke, width - stroke * 2, height - stroke * 2, radius);
   ctx.fill();
 
-  // Border — dashed green while the panel is still open, as on the reference.
-  ctx.strokeStyle = chip.taken ? HAIRLINE : GREEN;
+  // Border — dashed green while the placement is still open to a request.
+  ctx.strokeStyle = chip.open ? GREEN : HAIRLINE;
   ctx.lineWidth = stroke * (hovered ? 2 : 1);
-  if (!chip.taken) ctx.setLineDash([stroke * 3, stroke * 2.4]);
+  if (chip.open) ctx.setLineDash([stroke * 3, stroke * 2.4]);
   roundRect(ctx, stroke, stroke, width - stroke * 2, height - stroke * 2, radius);
   ctx.stroke();
   ctx.setLineDash([]);
 
-  const label = chip.sponsor ?? "Available";
-  const price = compact(chip.amountUsd);
-  const priceColor = chip.taken ? INK_2 : GREEN;
+  const label = chip.name;
+  const status = chip.statusLabel;
+  const statusColor = chip.open ? GREEN : INK_2;
 
   ctx.textBaseline = "middle";
 
@@ -195,18 +186,18 @@ export function createPanelTexture(chip: PanelChip, hovered = false): THREE.Canv
     ctx.fillText(chip.slotId, pad, height / 2);
     const numW = ctx.measureText(chip.slotId).width;
 
-    const priceSize = Math.max(10, height * 0.34);
-    ctx.font = font(600, priceSize);
-    const priceW = ctx.measureText(price).width;
-    ctx.fillStyle = priceColor;
+    const statusSize = Math.max(9, height * 0.28);
+    ctx.font = font(600, statusSize);
+    const statusW = ctx.measureText(status).width;
+    ctx.fillStyle = statusColor;
     ctx.textAlign = "right";
-    ctx.fillText(price, width - pad, height / 2);
+    ctx.fillText(status, width - pad, height / 2);
 
     const nameX = pad + numW + pad * 0.9;
-    const nameMax = width - pad - priceW - pad * 0.9 - nameX;
+    const nameMax = width - pad - statusW - pad * 0.9 - nameX;
     const nameSize = fitText(ctx, label, nameMax, height * 0.42, 600);
     ctx.font = font(600, nameSize);
-    ctx.fillStyle = chip.taken ? INK : INK_2;
+    ctx.fillStyle = INK;
     ctx.textAlign = "left";
     ctx.fillText(ellipsise(ctx, label, nameMax), nameX, height / 2);
 
@@ -220,12 +211,12 @@ export function createPanelTexture(chip: PanelChip, hovered = false): THREE.Canv
   ctx.textAlign = "left";
   ctx.fillText(chip.slotId, pad, pad + numSize * 0.55);
 
-  const priceSize = Math.max(10, Math.min(height * 0.19, width * 0.17));
-  const priceY = height - pad - priceSize * 0.55;
+  const statusSize = Math.max(9, Math.min(height * 0.16, width * 0.15));
+  const statusY = height - pad - statusSize * 0.55;
 
   const nameMax = width - pad * 2;
   const nameTop = pad + numSize;
-  const nameBottom = priceY - priceSize * 0.8;
+  const nameBottom = statusY - statusSize * 0.9;
   const { size: nameSize, lines } = fitWrapped(
     ctx,
     label,
@@ -236,7 +227,7 @@ export function createPanelTexture(chip: PanelChip, hovered = false): THREE.Canv
   );
 
   ctx.font = font(600, nameSize);
-  ctx.fillStyle = chip.taken ? INK : INK_2;
+  ctx.fillStyle = INK;
   ctx.textAlign = "center";
 
   const blockH = lines.length * nameSize * 1.2;
@@ -246,10 +237,10 @@ export function createPanelTexture(chip: PanelChip, hovered = false): THREE.Canv
     y += nameSize * 1.2;
   }
 
-  ctx.font = font(600, priceSize);
-  ctx.fillStyle = priceColor;
+  ctx.font = font(600, statusSize);
+  ctx.fillStyle = statusColor;
   ctx.textAlign = "center";
-  ctx.fillText(price, width / 2, priceY);
+  ctx.fillText(ellipsise(ctx, status, nameMax), width / 2, statusY);
 
   return finish(canvas);
 }

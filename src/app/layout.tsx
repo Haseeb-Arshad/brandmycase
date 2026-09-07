@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
+import { analyticsScript } from "@/lib/analytics";
 import "./globals.css";
 
 /**
@@ -12,16 +14,31 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+const title = "Brand the Case — Sponsor Haseeb's DevDay Journey";
+const description =
+  "A developer from Pakistan is heading to OpenAI DevDay in San Francisco. Sponsor the journey and put your company on the case travelling with him. Independent project, not affiliated with OpenAI.";
+
+/**
+ * `metadataBase` is configuration, never a hard-coded domain: the campaign
+ * runs at case.haseeburshad.me in production and on localhost everywhere else,
+ * and every canonical and Open Graph URL is derived from this one value.
+ */
 export const metadata: Metadata = {
-  title: "CODEC — Brand the case",
-  description:
-    "Twenty brandable panels across five faces of a moulded travel case, auctioned to companies. San Francisco for DevDay, then eleven cities after it.",
+  title: { default: title, template: "%s · Brand the Case" },
+  description,
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "CODEC — Brand the case",
-    description:
-      "Twenty measured panels on a case that spends a year in the rooms you are trying to reach.",
+    title,
+    description,
     type: "website",
+    siteName: "Brand the Case",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
   },
   robots: { index: true, follow: true },
 };
@@ -33,9 +50,26 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Privacy-conscious analytics, loaded only when both variables are set. No
+  // script configured means no third-party request and no cookie at all.
+  const analytics = analyticsScript();
+
   return (
     <html lang="en" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        <a className="skip-link" href="#top">
+          Skip to content
+        </a>
+        {children}
+        {analytics && (
+          <Script
+            defer
+            src={analytics.src}
+            data-domain={analytics.domain}
+            strategy="afterInteractive"
+          />
+        )}
+      </body>
     </html>
   );
 }

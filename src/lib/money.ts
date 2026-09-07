@@ -1,5 +1,9 @@
 /**
- * Money helpers.
+ * Money helpers — FUTURE / DISABLED IN THE FOUNDING EDITION.
+ *
+ * Deposit and increment arithmetic for the retired bid-and-deposit auction.
+ * The Founding Edition displays no monetary value anywhere, so nothing on the
+ * public site imports this module.
  *
  * Every amount in this codebase is an integer number of whole US dollars.
  * There are no floats and no cents anywhere except at the payment boundary,

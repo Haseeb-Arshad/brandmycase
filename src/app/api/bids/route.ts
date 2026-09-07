@@ -3,13 +3,21 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { bidSchema, fieldErrors } from "@/lib/validation";
 import { getPanelState, settleDeposit } from "@/lib/auction";
 import { depositFor, formatUsd, toPaymentAmount } from "@/lib/money";
-import { createDepositSession, PAYMENTS_MODE } from "@/lib/payments";
+import { createDepositSession, PAYMENT_MODE, paymentsEnabled } from "@/lib/payments";
 import { refundOutbidBids } from "@/lib/refunds";
+import { auctionEndpointsEnabled } from "@/lib/campaign";
 
 /**
- * POST /api/bids
+ * POST /api/bids — FUTURE / DISABLED IN THE FOUNDING EDITION.
  *
- * Place a bid on a panel. The flow is:
+ * The retired bid-and-deposit endpoint. While CAMPAIGN_MODE is `interest` this
+ * route does not exist as far as a caller is concerned: it answers 404 before
+ * reading the body, before touching Supabase, and before any payment code
+ * runs. Somebody who finds the path in an old copy of the site cannot create a
+ * bid row, cannot open a checkout, and above all cannot trigger a mock
+ * settlement that would tell them money had moved.
+ *
+ * With CAMPAIGN_MODE=auction and real credentials the original flow is:
  *
  *   1. validate the body
  *   2. re-read the panel's live state (never trust a price from the client)
@@ -22,7 +30,23 @@ import { refundOutbidBids } from "@/lib/refunds";
  * on the panel, so two people bidding at once cannot both take it.
  */
 
+export const dynamic = "force-dynamic";
+
 export async function POST(request: NextRequest) {
+  // Gate one: the campaign is not an auction, so there is nothing to bid on.
+  if (!auctionEndpointsEnabled()) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  // Gate two: the auction is on but no usable payment backend is configured.
+  // Refuse rather than record a bid that can never settle.
+  if (!paymentsEnabled()) {
+    return NextResponse.json(
+      { error: "Bidding is unavailable while payments are not configured." },
+      { status: 503 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -73,7 +97,7 @@ export async function POST(request: NextRequest) {
       amount_usd: input.amountUsd,
       deposit_usd: depositUsd,
       status: "PENDING",
-      payment_provider: PAYMENTS_MODE === "live" ? "safepay" : "mock",
+      payment_provider: PAYMENT_MODE === "live" ? "safepay" : "mock",
       payment_currency: "USD",
       payment_amount_minor: toPaymentAmount(depositUsd),
     })
@@ -103,7 +127,7 @@ export async function POST(request: NextRequest) {
     // A live tracker may already exist if a later SDK step failed. Keep that
     // row so a provider webhook can still reconcile it by bid metadata. Local
     // mock/misconfigured attempts have no provider-side payment to reconcile.
-    if (PAYMENTS_MODE !== "live") {
+    if (PAYMENT_MODE !== "live") {
       await getSupabaseAdmin().from("bids").delete().eq("id", bid.id);
     }
     console.error("[bids] checkout failed", error);

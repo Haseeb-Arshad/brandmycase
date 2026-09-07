@@ -1,164 +1,277 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
 import { RoundedBox } from "@react-three/drei";
+import * as THREE from "three";
 import { CASE } from "@/data/placements";
+import {
+  createShellNormalMap,
+  createShellRoughnessMap,
+} from "@/components/three/shellTexture";
 
 /**
- * CODEC ONE — the case itself, built from primitives.
+ * The case.
  *
- * Deliberately no .glb: a procedural model keeps the repo asset-free, means the
- * panel map in placements.ts is the literal geometry rather than a guess at
- * where a texture atlas lands, and lets the shell dimensions change in one
- * constant without re-exporting anything from a DCC tool.
+ * Modelled on a matte black hardshell spinner: two clamshell halves with
+ * diagonal ribbing moulded into the polycarbonate, a zip seam running the whole
+ * way round, recessed grab handles, a two-tube telescoping handle, and four
+ * dual-wheel spinner castors.
  *
- * Parts, bottom to top: four spinner wheels in their housings, the moulded
- * shell, an aluminium split frame around the seam, eight corner bumpers, a TSA
- * lock on the lid, and a telescoping handle at the back of the lid.
+ * Still built from primitives rather than a .glb. That keeps the repo
+ * asset-free and — more importantly — means the panel map in placements.ts is
+ * the literal geometry rather than a guess at where a texture atlas lands. The
+ * realism comes from the surface treatment and the fittings rather than from
+ * polygon count: the ribbing is a generated normal map (see shellTexture.ts),
+ * which is what gives the shell a highlight to travel along as the case turns.
  */
 
 const HALF_W = CASE.width / 2;
 const HALF_H = CASE.height / 2;
 const HALF_D = CASE.depth / 2;
 
-/** Where the wheels touch down. Used by the caller to place contact shadows. */
-export const GROUND_Y = -HALF_H - 0.13;
+/** Depth of each clamshell half. The two together make up CASE.depth. */
+const SHELL_HALF_DEPTH = HALF_D;
 
-const SHELL_COLOR = "#474c53";
-const ALUMINIUM = "#b6babf";
-const RUBBER = "#1d1f23";
+/** Where the wheels touch down. The caller puts contact shadows here. */
+export const GROUND_Y = -HALF_H - 0.178;
 
-function Wheel({ x, z }: { x: number; z: number }) {
-  const housingY = -HALF_H - 0.025;
-  const wheelY = -HALF_H - 0.085;
+/** Telescoping handle geometry, shared between the tubes and the grip. */
+const HANDLE_Z = -0.155;
+const HANDLE_RISE = 0.22;
+const HANDLE_X = 0.152;
+
+const COLORS = {
+  shell: "#16171a",
+  plastic: "#0e0f11",
+  rubber: "#0a0b0c",
+  chrome: "#c8ccd2",
+  seam: "#121316",
+} as const;
+
+/* ------------------------------------------------------------------------- */
+
+function DualWheel({ x, z }: { x: number; z: number }) {
+  const plateY = -HALF_H - 0.012;
+  const housingY = -HALF_H - 0.05;
+  const axleY = -HALF_H - 0.118;
+
   return (
-    <group>
+    <group position={[x, 0, z]}>
+      {/* Mounting plate, flush under the shell */}
       <RoundedBox
-        args={[0.1, 0.06, 0.11]}
-        radius={0.014}
+        args={[0.135, 0.026, 0.135]}
+        radius={0.008}
         smoothness={3}
-        position={[x, housingY, z]}
+        position={[0, plateY, 0]}
       >
-        <meshStandardMaterial color={RUBBER} roughness={0.75} metalness={0.1} />
+        <meshStandardMaterial color={COLORS.plastic} roughness={0.6} metalness={0.05} />
       </RoundedBox>
-      {/* Axis along X so the wheel reads as a spinner castor from the front. */}
-      <mesh position={[x, wheelY, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
-        <cylinderGeometry args={[0.045, 0.045, 0.034, 24]} />
-        <meshStandardMaterial color="#17181b" roughness={0.55} metalness={0.15} />
-      </mesh>
-      {/* Hub cap */}
-      <mesh position={[x + 0.018, wheelY, z]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.018, 0.018, 0.004, 16]} />
-        <meshStandardMaterial color={ALUMINIUM} roughness={0.3} metalness={0.85} />
-      </mesh>
+
+      {/* Swivel yoke */}
+      <RoundedBox
+        args={[0.098, 0.062, 0.112]}
+        radius={0.022}
+        smoothness={4}
+        position={[0, housingY, 0]}
+      >
+        <meshStandardMaterial color={COLORS.plastic} roughness={0.55} metalness={0.08} />
+      </RoundedBox>
+
+      {/* Two discs on a shared axle — a dual spinner castor. */}
+      {[-0.031, 0.031].map((dx) => (
+        <mesh key={dx} position={[dx, axleY, 0]} rotation={[0, 0, Math.PI / 2]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 0.026, 28]} />
+          <meshStandardMaterial color={COLORS.rubber} roughness={0.85} metalness={0.02} />
+        </mesh>
+      ))}
+
+      {/* Hub caps */}
+      {[-0.046, 0.046].map((dx) => (
+        <mesh key={dx} position={[dx, axleY, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.019, 0.019, 0.005, 18]} />
+          <meshStandardMaterial color={COLORS.chrome} roughness={0.2} metalness={0.95} />
+        </mesh>
+      ))}
     </group>
   );
 }
 
-function CornerBumper({ x, y, z }: { x: number; y: number; z: number }) {
+/** Recessed grab handle sunk into a face. `rotation` orients it per face. */
+function GrabHandle({
+  position,
+  rotation = [0, 0, 0],
+}: {
+  position: [number, number, number];
+  rotation?: [number, number, number];
+}) {
   return (
-    <RoundedBox args={[0.13, 0.13, 0.13]} radius={0.045} smoothness={4} position={[x, y, z]}>
-      <meshStandardMaterial color={RUBBER} roughness={0.82} metalness={0.05} />
-    </RoundedBox>
+    <group position={position} rotation={rotation}>
+      {/* The recess it sits in */}
+      <RoundedBox args={[0.205, 0.02, 0.062]} radius={0.009} smoothness={3}>
+        <meshStandardMaterial color="#000000" roughness={0.9} metalness={0} />
+      </RoundedBox>
+      {/* The bar itself, proud of the recess */}
+      <RoundedBox
+        args={[0.17, 0.028, 0.034]}
+        radius={0.014}
+        smoothness={4}
+        position={[0, 0.012, 0]}
+        castShadow
+      >
+        <meshStandardMaterial color={COLORS.plastic} roughness={0.45} metalness={0.1} />
+      </RoundedBox>
+    </group>
   );
 }
 
 function TelescopingHandle() {
-  // Sits at the back of the lid, clear of the top-face panels (see placements.ts).
-  const z = -0.155;
-  const postH = 0.2;
-  const postY = HALF_H + postH / 2 - 0.01;
-  const barY = HALF_H + postH;
+  const tubeY = HALF_H + HANDLE_RISE / 2;
+  const gripY = HALF_H + HANDLE_RISE + 0.022;
 
   return (
     <group>
-      {[-0.15, 0.15].map((x) => (
-        <mesh key={x} position={[x, postY, z]} castShadow>
-          <cylinderGeometry args={[0.013, 0.013, postH, 16]} />
-          <meshStandardMaterial color={ALUMINIUM} roughness={0.26} metalness={0.9} />
+      {/* Mount plate the tubes retract into */}
+      <RoundedBox
+        args={[0.4, 0.024, 0.078]}
+        radius={0.01}
+        smoothness={4}
+        position={[0, HALF_H - 0.004, HANDLE_Z]}
+      >
+        <meshStandardMaterial color={COLORS.plastic} roughness={0.55} metalness={0.1} />
+      </RoundedBox>
+
+      {/* Two chrome tubes */}
+      {[-HANDLE_X, HANDLE_X].map((x) => (
+        <mesh key={x} position={[x, tubeY, HANDLE_Z]} castShadow>
+          <cylinderGeometry args={[0.0145, 0.0145, HANDLE_RISE, 20]} />
+          <meshStandardMaterial color={COLORS.chrome} roughness={0.16} metalness={1} />
         </mesh>
       ))}
+
+      {/* Grip */}
       <RoundedBox
-        args={[0.34, 0.032, 0.042]}
-        radius={0.015}
-        smoothness={4}
-        position={[0, barY, z]}
+        args={[0.345, 0.05, 0.062]}
+        radius={0.022}
+        smoothness={5}
+        position={[0, gripY, HANDLE_Z]}
         castShadow
       >
-        <meshStandardMaterial color="#232529" roughness={0.6} metalness={0.2} />
+        <meshStandardMaterial color={COLORS.plastic} roughness={0.5} metalness={0.08} />
       </RoundedBox>
-      {/* Release button */}
-      <mesh position={[0, barY + 0.018, z]}>
-        <boxGeometry args={[0.05, 0.006, 0.022]} />
-        <meshStandardMaterial color={ALUMINIUM} roughness={0.3} metalness={0.85} />
-      </mesh>
+
+      {/* Release button set into the grip */}
+      <RoundedBox
+        args={[0.062, 0.01, 0.026]}
+        radius={0.004}
+        smoothness={3}
+        position={[0, gripY + 0.026, HANDLE_Z]}
+      >
+        <meshStandardMaterial color={COLORS.chrome} roughness={0.28} metalness={0.9} />
+      </RoundedBox>
     </group>
   );
 }
 
+/* ------------------------------------------------------------------------- */
+
 export function CaseModel() {
-  const bumperX = HALF_W - 0.03;
-  const bumperY = HALF_H - 0.03;
-  const bumperZ = HALF_D - 0.03;
+  // Built once. Each is a 512 x 512 bitmap on the GPU, so both are disposed.
+  const normalMap = useMemo(() => createShellNormalMap(), []);
+  const roughnessMap = useMemo(() => createShellRoughnessMap(), []);
+
+  useEffect(() => {
+    // Repeat chosen so the ribs land around 2.5 cm apart on the front face,
+    // scaled on V to hold them near 45 degrees across a 76 x 110 cm panel.
+    for (const map of [normalMap, roughnessMap]) {
+      map.repeat.set(4, 5.8);
+      map.needsUpdate = true;
+    }
+    return () => {
+      normalMap.dispose();
+      roughnessMap.dispose();
+    };
+  }, [normalMap, roughnessMap]);
+
+  const normalScale = useMemo(() => new THREE.Vector2(0.9, 0.9), []);
+
+  /**
+   * Both halves share this treatment. Rendered from a function rather than a
+   * shared element so each RoundedBox gets its own material instance.
+   */
+  const shellMaterial = () => (
+    <meshPhysicalMaterial
+      color={COLORS.shell}
+      normalMap={normalMap}
+      normalScale={normalScale}
+      roughnessMap={roughnessMap}
+      roughness={1}
+      metalness={0.04}
+      clearcoat={0.3}
+      clearcoatRoughness={0.6}
+      sheen={0.2}
+      sheenColor="#2b2f36"
+    />
+  );
 
   return (
     <group>
-      {/* Moulded shell */}
+      {/* Front clamshell */}
       <RoundedBox
-        args={[CASE.width, CASE.height, CASE.depth]}
-        radius={CASE.radius}
-        smoothness={6}
+        args={[CASE.width, CASE.height, SHELL_HALF_DEPTH]}
+        radius={0.058}
+        smoothness={8}
+        position={[0, 0, SHELL_HALF_DEPTH / 2]}
         castShadow
         receiveShadow
       >
-        <meshPhysicalMaterial
-          color={SHELL_COLOR}
-          roughness={0.42}
-          metalness={0.12}
-          clearcoat={0.55}
-          clearcoatRoughness={0.35}
-        />
+        {shellMaterial()}
       </RoundedBox>
 
-      {/* Aluminium split frame: slightly proud in X and Y, thin in Z, so it
-          reads as a rim band on the spines, lid and base but stays buried
-          inside the front and back shells. */}
+      {/* Back clamshell */}
       <RoundedBox
-        args={[CASE.width + 0.012, CASE.height + 0.012, 0.022]}
-        radius={0.01}
-        smoothness={4}
+        args={[CASE.width, CASE.height, SHELL_HALF_DEPTH]}
+        radius={0.058}
+        smoothness={8}
+        position={[0, 0, -SHELL_HALF_DEPTH / 2]}
+        castShadow
+        receiveShadow
+      >
+        {shellMaterial()}
+      </RoundedBox>
+
+      {/* Zip seam: fills the groove where the halves meet, so the case reads as
+          a clamshell that opens rather than a solid block. */}
+      <RoundedBox
+        args={[CASE.width + 0.006, CASE.height + 0.006, 0.026]}
+        radius={0.013}
+        smoothness={5}
         position={[0, 0, 0]}
       >
-        <meshStandardMaterial color={ALUMINIUM} roughness={0.28} metalness={0.88} />
+        <meshStandardMaterial color={COLORS.seam} roughness={0.72} metalness={0.12} />
       </RoundedBox>
 
-      {/* Corner bumpers */}
-      {[-1, 1].map((sx) =>
-        [-1, 1].map((sy) =>
-          [-1, 1].map((sz) => (
-            <CornerBumper
-              key={`${sx}${sy}${sz}`}
-              x={sx * bumperX}
-              y={sy * bumperY}
-              z={sz * bumperZ}
-            />
-          )),
-        ),
-      )}
+      {/* Zip pulls, parked on the right spine */}
+      {[0.055, -0.005].map((y) => (
+        <RoundedBox
+          key={y}
+          args={[0.02, 0.036, 0.008]}
+          radius={0.003}
+          smoothness={3}
+          position={[HALF_W + 0.012, y, 0]}
+        >
+          <meshStandardMaterial color={COLORS.chrome} roughness={0.25} metalness={0.92} />
+        </RoundedBox>
+      ))}
 
-      {/* TSA lock, front edge of the lid */}
-      <RoundedBox
-        args={[0.07, 0.02, 0.035]}
-        radius={0.007}
-        smoothness={3}
-        position={[0, HALF_H + 0.004, 0.165]}
-      >
-        <meshStandardMaterial color={ALUMINIUM} roughness={0.3} metalness={0.85} />
-      </RoundedBox>
+      {/* Grab handles: one on the lid at the front edge, one low on the right
+          spine — both placed to clear the panel map. */}
+      <GrabHandle position={[0, HALF_H - 0.002, 0.168]} />
+      <GrabHandle position={[HALF_W - 0.002, -0.5, 0]} rotation={[0, 0, Math.PI / 2]} />
 
       <TelescopingHandle />
 
-      {[-0.26, 0.26].map((x) =>
-        [-0.13, 0.13].map((z) => <Wheel key={`${x}${z}`} x={x} z={z} />),
+      {[-0.27, 0.27].map((x) =>
+        [-0.125, 0.125].map((z) => <DualWheel key={`${x}:${z}`} x={x} z={z} />),
       )}
     </group>
   );

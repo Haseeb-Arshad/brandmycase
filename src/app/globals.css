@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CODEC — design system
+   Brand the Case — design system
 
    Modelled directly on brandmymac.com's UI: an Apple-flavoured system built on
    white, Inter, a centred single column, generously rounded cards and soft
@@ -311,76 +311,34 @@ h1 {
 .hero h1 {
   margin-top: 20px;
 }
+/* Controlled line breaks, but only once the line actually fits. */
+@media (min-width: 640px) {
+  .hero-title span {
+    display: block;
+  }
+}
 .hero .lede {
   margin-top: 16px;
 }
 
-.raise {
-  max-width: 24rem;
-  margin: 32px auto 0;
-}
-.raise-topline {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-.raise-topline strong {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--green);
-}
-.raise-topline strong span {
-  margin-left: 7px;
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--ink-2);
-}
-.raise-goal {
-  font-size: 14px;
-  color: var(--ink-2);
-}
-.raise-goal b {
-  font-weight: 500;
-  color: var(--green);
+.eyebrow-sep {
+  opacity: 0.45;
 }
 
-.progress {
-  height: 8px;
-  margin-top: 8px;
+/* The independence disclosure, sitting directly under the hero lede. It is a
+   quiet chip rather than a warning banner: the fact is unremarkable and the
+   design should treat it that way. */
+.disclosure-chip {
+  display: inline-block;
+  margin-top: 20px;
+  padding: 7px 15px;
   border-radius: 999px;
-  background: rgba(210, 210, 215, 0.6);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-}
-.progress span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--green-bright);
-  transition: width 0.6s var(--ease-out);
-}
-.raise-note {
-  margin-top: 8px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
   font-size: 12px;
-  color: var(--ink-2);
-}
-
-.hero-latest {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 26px;
-  font-size: 12px;
-  color: var(--ink-2);
-}
-.hero-latest b {
   font-weight: 500;
-  color: var(--ink);
-}
-.hero-latest .muted {
-  opacity: 0.7;
+  line-height: 1.5;
+  color: var(--ink-2);
 }
 
 .hero-actions {
@@ -412,7 +370,7 @@ h1 {
 
 .case-stage {
   position: relative;
-  aspect-ratio: 1.14;
+  aspect-ratio: 1.05;
   border-radius: 14px;
   overflow: hidden;
   touch-action: none;
@@ -480,36 +438,6 @@ h1 {
   color: var(--ink);
 }
 
-/* --- Stats strip ---------------------------------------------------------- */
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1px;
-  max-width: var(--wide);
-  margin: 0 auto;
-  border-radius: 18px;
-  overflow: hidden;
-  background: var(--hairline);
-}
-.stats div {
-  padding: 26px 22px;
-  background: var(--surface);
-  text-align: center;
-}
-.stats b {
-  display: block;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
-}
-.stats span {
-  display: block;
-  margin-top: 5px;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
 /* --- Steps ---------------------------------------------------------------- */
 
 .steps {
@@ -535,7 +463,7 @@ h1 {
   font-weight: 600;
 }
 .step h3 {
-  margin: 18px 0 8px;
+  margin: 16px 0 8px;
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -546,48 +474,83 @@ h1 {
   color: var(--ink-2);
 }
 
-/* --- Tour ----------------------------------------------------------------- */
-
-.tour-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
-  gap: 12px;
-  margin-top: 46px;
-}
-.tour-stop {
-  padding: 20px;
-  border-radius: 16px;
-  border: 1px solid var(--hairline);
-  background: #fff;
-}
-.tour-stop[data-flagship="true"] {
-  border-color: var(--green);
-  background: rgba(45, 164, 78, 0.05);
-}
-.tour-stop span {
-  font-size: 12px;
-  font-weight: 500;
+/* Fine print. Used wherever a claim needs its caveat in the same breath. */
+.fine-print {
+  max-width: 72ch;
+  margin: 30px auto 0;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.75;
   color: var(--ink-3);
 }
-.tour-stop h4 {
-  margin: 10px 0 4px;
-  font-size: 17px;
+
+/* --- Founding sponsor benefits -------------------------------------------- */
+
+.benefits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1px;
+  margin-top: 46px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--hairline);
+}
+.benefit {
+  padding: 30px 26px;
+  background: #fff;
+}
+.benefit-no {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--green);
+}
+.benefit h3 {
+  margin: 14px 0 8px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
-.tour-stop small {
-  font-size: 13px;
+.benefit p {
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--ink-2);
 }
-.tour-flag {
-  display: inline-block;
-  margin-top: 10px;
-  border-radius: 999px;
-  background: var(--green);
-  padding: 3px 9px;
-  font-size: 11px;
+
+/* --- Transparency --------------------------------------------------------- */
+
+.disclosure-card {
+  max-width: 760px;
+  margin-inline: auto;
+  padding: 40px 44px;
+  border-radius: 22px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+.disclosure-card p {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+.disclosure-card .section-kicker {
+  margin: 0;
+  font-size: 13px;
+}
+.disclosure-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 26px !important;
+  font-size: 14px;
+  color: var(--ink-3);
+}
+.disclosure-links a {
+  color: var(--blue);
   font-weight: 500;
-  color: #fff;
+}
+.disclosure-links a:hover {
+  text-decoration: underline;
 }
 
 /* --- Inventory ------------------------------------------------------------ */
@@ -674,52 +637,48 @@ h1 {
   padding-top: 14px;
   border-top: 1px solid var(--hairline);
 }
-.panel-price {
-  font-size: 17px;
-  font-weight: 600;
+.panel-tier {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
 }
 .panel-status {
   font-size: 12px;
+  font-weight: 500;
   color: var(--ink-2);
 }
-.panel-status.open {
+.panel-status[data-status="OPEN"] {
   color: var(--green);
-  font-weight: 500;
 }
 
-/* --- Ticker --------------------------------------------------------------- */
-
-.ticker {
-  max-width: var(--narrow);
-  margin-inline: auto;
-  border-radius: 18px;
-  border: 1px solid var(--hairline);
-  overflow: hidden;
+/* The Anchor placement reads as the biggest thing on the case, because it is:
+   a deeper card and a heavier name. The tier and the price do the rest. */
+.panel-card[data-tier="ANCHOR"] {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 6px 18px -12px rgba(0, 0, 0, 0.25);
 }
-.ticker li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 14px 20px;
-  font-size: 13px;
-  color: var(--ink-2);
+.panel-card[data-tier="ANCHOR"] strong {
+  font-size: 19px;
 }
-.ticker li + li {
-  border-top: 1px solid var(--hairline);
-}
-.ticker li b {
-  font-weight: 500;
+.panel-card[data-tier="ANCHOR"] .panel-tier,
+.panel-card[data-tier="PARTNER"] .panel-tier {
   color: var(--ink);
 }
-.ticker li .amt {
-  font-weight: 600;
-  color: var(--green);
+
+/* A taken placement is not a button: it does not lift, and the cursor says so. */
+.panel-card[data-open="false"] {
+  cursor: default;
+  opacity: 0.72;
 }
-.ticker li .when {
-  margin-left: auto;
-  font-size: 12px;
-  opacity: 0.75;
+.panel-card[data-open="false"]:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.inventory-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--ink-2);
+  font-size: 15px;
 }
 
 /* --- FAQ ------------------------------------------------------------------ */
@@ -778,24 +737,21 @@ details p {
   padding: 76px 24px 44px;
   text-align: center;
 }
-.footer h2 {
-  font-size: clamp(1.7rem, 4vw, 2.8rem);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
-}
-.footer p {
-  margin: 16px auto 0;
-  max-width: 52ch;
-  font-size: 15px;
-  line-height: 1.6;
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 40px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.62);
 }
-.footer .pill-blue {
-  margin-top: 30px;
+.footer-links a:hover {
+  color: #fff;
 }
+
 .footer-fine {
-  margin-top: 54px;
+  margin-top: 34px;
   padding-top: 26px;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   font-size: 12px;
@@ -808,7 +764,7 @@ details p {
   text-underline-offset: 3px;
 }
 
-/* --- Bid modal ------------------------------------------------------------ */
+/* --- Placement request modal ------------------------------------------------------------ */
 
 .modal-backdrop {
   position: fixed;
@@ -828,9 +784,9 @@ details p {
   }
 }
 
-.bid-modal {
+.request-modal {
   position: relative;
-  width: min(520px, 100%);
+  width: min(560px, 100%);
   max-height: calc(100vh - 40px);
   overflow: auto;
   padding: 34px;
@@ -868,13 +824,13 @@ details p {
   font-weight: 500;
   color: var(--ink-3);
 }
-.bid-modal h2 {
+.request-modal h2 {
   margin: 8px 0 8px;
   font-size: 27px;
   font-weight: 600;
   letter-spacing: -0.03em;
 }
-.bid-modal > .modal-desc {
+.request-modal > .modal-desc {
   font-size: 14px;
   line-height: 1.6;
   color: var(--ink-2);
@@ -906,24 +862,35 @@ details p {
   font-weight: 600;
   letter-spacing: -0.02em;
 }
+.modal-meta b[data-status="OPEN"] {
+  color: var(--green);
+}
 
-.bid-modal form {
+.request-modal form {
   display: grid;
-  gap: 14px;
+  gap: 15px;
   margin-top: 24px;
 }
-.bid-modal label {
+.field {
   display: grid;
   gap: 6px;
+}
+.field label {
   font-size: 13px;
   font-weight: 500;
 }
-.bid-modal label .opt {
+.field .opt {
   color: var(--ink-3);
   font-weight: 400;
 }
-.bid-modal input,
-.bid-modal textarea {
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+.request-modal input,
+.request-modal select,
+.request-modal textarea {
   width: 100%;
   padding: 11px 14px;
   border-radius: 10px;
@@ -931,26 +898,81 @@ details p {
   background: #fff;
   font: inherit;
   font-size: 15px;
+  color: var(--ink);
   outline: none;
   resize: none;
   transition: border-color 0.16s var(--ease-out), box-shadow 0.16s var(--ease-out);
 }
-.bid-modal input:focus,
-.bid-modal textarea:focus {
+.request-modal select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%),
+    linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 38px;
+}
+.request-modal input:focus,
+.request-modal select:focus,
+.request-modal textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+.request-modal input[aria-invalid="true"],
+.request-modal textarea[aria-invalid="true"] {
+  border-color: #b3261e;
+}
+
+.field.check {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 11px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.field.check input {
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  accent-color: var(--blue);
+}
+.field.check label {
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+.field-help {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
 }
 .field-error {
   font-size: 12px;
   font-weight: 400;
-  color: #c0392b;
+  /* 7.4:1 on white — an error must be readable, not merely red. */
+  color: #b3261e;
+}
+
+/* Honeypot: off-screen rather than display:none, so a bot that only skips
+   hidden fields still fills it in. Never announced, never tabbable. */
+.honeypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .form-error {
   padding: 11px 14px;
   border-radius: 10px;
   background: #fdecea;
   font-size: 13px;
-  color: #a3271b;
+  line-height: 1.55;
+  color: #8c1d18;
 }
 
 .submit {
@@ -1009,6 +1031,79 @@ details p {
   margin-top: 24px;
 }
 
+/* --- Legal pages ---------------------------------------------------------- */
+
+.legal-page {
+  padding: 64px 0 96px;
+}
+.legal-page h1 {
+  margin-top: 12px;
+  font-size: clamp(1.9rem, 4vw, 3rem);
+}
+.legal-page .lede {
+  margin: 18px 0 0;
+  max-width: 62ch;
+}
+.legal-page section {
+  margin-top: 40px;
+  max-width: 68ch;
+}
+.legal-page section h2 {
+  margin-bottom: 10px;
+}
+.legal-page p {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+.legal-list {
+  margin: 12px 0 0;
+  padding-left: 0;
+  display: grid;
+  gap: 7px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.legal-list li {
+  position: relative;
+  padding-left: 20px;
+}
+.legal-list li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hairline);
+}
+.legal-back {
+  margin-top: 52px;
+  padding-top: 26px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Skip link: off-screen until focused, then a real target at the top left. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
 /* --- Success page --------------------------------------------------------- */
 
 .success-page {
@@ -1017,6 +1112,460 @@ details p {
   min-height: calc(100svh - var(--nav-h));
   padding: 60px 24px;
   text-align: center;
+}
+
+/* --- Funding bar ---------------------------------------------------------- */
+
+/* The one number on the page that is a claim about money. It is styled to be
+   read, not to be impressive: a real figure at zero is more persuasive than a
+   dressed-up one. */
+.funding {
+  max-width: 520px;
+  margin: 34px auto 0;
+  text-align: left;
+}
+.funding-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.funding-raised {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.funding-raised b {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+.funding-percent {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.funding-bar {
+  position: relative;
+  margin-top: 10px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.funding-bar span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+  border-radius: 999px;
+  background: var(--green-bright);
+  transition: width 0.4s var(--ease-out);
+}
+.funding-meta {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.funding-meta b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* --- Founder -------------------------------------------------------------- */
+
+.founder-card {
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: 32px;
+  align-items: start;
+  margin-top: 42px;
+  padding: 32px;
+  border-radius: 22px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+}
+.founder-portrait {
+  width: 132px;
+  height: 132px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+}
+.founder-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.founder-monogram {
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--ink-3);
+}
+.founder-body h3 {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+.founder-role {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.founder-body p {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.founder-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+.founder-link {
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.founder-link:hover {
+  border-color: var(--ink);
+}
+
+/* --- Acceptance proof ----------------------------------------------------- */
+
+.proof-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 26px;
+  padding: 32px;
+  border-radius: 22px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+}
+.proof-card:has(.proof-figure) {
+  grid-template-columns: 1fr minmax(0, 0.9fr);
+  align-items: center;
+}
+.proof-body p {
+  margin-top: 12px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.proof-disclosure {
+  font-size: 12.5px !important;
+  color: var(--ink-3) !important;
+}
+.proof-figure img {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--hairline);
+}
+.proof-figure figcaption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* --- Packages ------------------------------------------------------------- */
+
+.package-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 46px;
+}
+.package {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 30px 28px;
+  border-radius: 20px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+}
+/* The Anchor card is the one thing on this page that is allowed to shout. */
+.package[data-tier="ANCHOR"] {
+  border-color: var(--ink);
+  box-shadow: 0 20px 44px -28px rgba(0, 0, 0, 0.35);
+}
+.package[data-soldout="true"] {
+  background: var(--surface);
+}
+.package-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.package-price {
+  margin-top: 10px;
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+.package-summary {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.package-includes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.package-includes li {
+  padding-left: 22px;
+  position: relative;
+}
+.package-includes li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--green);
+  font-weight: 600;
+}
+.package footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.package-avail {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--green);
+}
+.package-avail[data-soldout="true"] {
+  color: var(--ink-3);
+}
+.package .pill-blue {
+  width: 100%;
+  justify-content: center;
+}
+
+/* --- Sponsors ------------------------------------------------------------- */
+
+.sponsor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 42px;
+  list-style: none;
+}
+.sponsor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 26px 20px;
+  border-radius: 18px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+  text-align: center;
+}
+.sponsor img {
+  max-height: 44px;
+  width: auto;
+  object-fit: contain;
+}
+.sponsor strong {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.sponsor-tier {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.sponsor a {
+  font-size: 13px;
+  color: var(--blue);
+}
+
+/* Zero sponsors is a state with its own design, not an empty container. */
+.sponsor-empty {
+  max-width: 520px;
+  margin: 36px auto 0;
+  padding: 34px 30px;
+  border-radius: 20px;
+  border: 1px dashed var(--hairline);
+  text-align: center;
+}
+.sponsor-empty p {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.sponsor-empty .pill-blue {
+  margin-top: 20px;
+}
+
+/* --- Budget --------------------------------------------------------------- */
+
+.budget-table {
+  max-width: 680px;
+  margin: 44px auto 0;
+  border-radius: 18px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+  overflow: hidden;
+}
+.budget-table > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 22px;
+}
+.budget-table > div + div {
+  border-top: 1px solid var(--hairline);
+}
+.budget-table b {
+  font-size: 14.5px;
+  font-weight: 500;
+}
+.budget-table small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.budget-amount {
+  font-size: 15px;
+  font-weight: 600;
+}
+.budget-total {
+  background: var(--surface);
+}
+
+/* --- Final call to action ------------------------------------------------- */
+
+.final-cta {
+  text-align: center;
+}
+.final-cta .h2 {
+  max-width: 22ch;
+  margin-inline: auto;
+}
+.final-cta .lede {
+  margin-top: 18px;
+}
+.final-cta .hero-actions {
+  margin-top: 30px;
+}
+.final-cta-email {
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+/* --- Tier chooser, inside the form ---------------------------------------- */
+
+.tier-choice {
+  border: 0;
+  padding: 0;
+  margin-bottom: 18px;
+}
+.tier-choice legend {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.tier-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.tier-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+}
+.tier-option[data-selected="true"] {
+  border-color: var(--blue);
+  background: rgba(0, 113, 227, 0.05);
+}
+/* The radio itself is the accessible control; the card is its label. It is
+   clipped rather than hidden with display:none (which removes it from the tab
+   order) or opacity:0 (which makes Chrome drop it from the accessibility tree
+   entirely — the tier choice would become invisible to a screen reader). */
+.tier-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tier-option:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.tier-option-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.tier-option-price {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.tier-option-avail {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.success-note {
+  margin-top: 12px;
+  font-size: 13px !important;
+  color: var(--ink-3) !important;
+}
+
+/* --- Nav wordmark --------------------------------------------------------- */
+
+.wordmark-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.wordmark-text small {
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--ink-3);
+}
+
+.footer-mark {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 /* --- Responsive ----------------------------------------------------------- */
@@ -1036,6 +1585,14 @@ details p {
     aspect-ratio: 1.02;
     border-radius: 12px;
   }
+  /* On a narrow stage the case fills the top of the frame, so the badge moves
+     out from under the handle rather than sitting across it. */
+  .stage-badge {
+    top: auto;
+    right: auto;
+    bottom: 12px;
+    left: 14px;
+  }
   .section {
     padding-block: 60px;
   }
@@ -1043,24 +1600,78 @@ details p {
     flex-direction: column;
     gap: 14px;
   }
+
+  /* Both segmented controls are wider than a phone. `overflow-x: clip` on the
+     body would hide the overflow rather than let it scroll, which would make
+     the last face and the Lid filter simply unreachable. So the rail scrolls
+     itself, bleeding to the screen edges so the first item still lines up with
+     the content beside it. */
+  .inventory-bar,
+  .face-switch {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-inline: 20px;
+    margin-inline: -20px;
+  }
+  .inventory-bar::-webkit-scrollbar,
+  .face-switch::-webkit-scrollbar {
+    display: none;
+  }
+  .inventory-bar > *,
+  .face-switch > * {
+    flex: none;
+  }
   .modal-meta {
     grid-template-columns: 1fr;
   }
-  .bid-modal {
+  .request-modal {
     padding: 28px 20px;
   }
-  .ticker li .when {
-    margin-left: 0;
-    width: 100%;
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+  .founder-card,
+  .proof-card {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    text-align: left;
+  }
+  .founder-portrait {
+    width: 96px;
+    height: 96px;
+  }
+  .tier-options {
+    grid-template-columns: 1fr;
+  }
+  .disclosure-card {
+    padding: 30px 24px;
+    text-align: center;
+  }
+  .disclosure-links {
+    justify-content: center;
+  }
+  .disclosure-card p {
+    margin-inline: auto;
+  }
+  .budget-table > div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .package-grid {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 520px) {
-  .stats {
-    grid-template-columns: 1fr 1fr;
+  .benefits {
+    grid-template-columns: 1fr;
   }
-  .tour-grid {
-    grid-template-columns: 1fr 1fr;
+  .funding-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }
 

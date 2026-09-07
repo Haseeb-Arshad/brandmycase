@@ -1,13 +1,35 @@
-# CODEC — Brand the case
+# Brand the Case — a travel sponsorship project by Haseeb Arshad
 
-A full-stack sponsorship auction for the twenty physical panels of a travelling
-hardshell case. Companies rotate a real 3D model of the case, pick a panel on
-any of its five faces, and bid for it. The winning bids are printed in cast
-vinyl, fitted to the shell, and travel for twelve months.
+A developer from Pakistan was accepted to attend **OpenAI DevDay** in San
+Francisco. This site raises **$3,000** in B2B sponsorship for the trip by
+selling physical brand placements on the travel case going with him. Companies
+rotate a real 3D model of the case, pick a placement, and send an inquiry.
 
-The UI follows [brandmymac.com](https://brandmymac.com): white ground, Inter,
-a centred single column, rounded cards, soft layered shadows, green for money
-and blue for the primary action.
+## Read this first
+
+- **This is an independent project.** OpenAI does not sponsor, endorse,
+  organise, approve, partner with or otherwise participate in this campaign.
+  Haseeb has been accepted to attend DevDay as an attendee; that is the entire
+  relationship. It is stated in the hero, the founder section, the FAQ, the
+  transparency section, the terms and the footer, and it must stay that way.
+- **No payment is taken on this site.** No checkout, no card form, no deposit.
+  A company sends an inquiry; Haseeb confirms availability and invoices them
+  directly, off-site.
+- **Fixed prices, three tiers.** Anchor $1,000 (1 placement), Partner $500
+  (4 placements), Supporter $250 (15 placements). One Anchor plus four
+  Partners is exactly the $3,000 goal; a test holds that arithmetic in place.
+- **Only CONFIRMED sponsorships count.** The funding bar sums confirmed rows in
+  Supabase and nothing else — not inquiries, not sent invoices. A panel is
+  shown as taken only because a confirmed sponsorship says so.
+- **Nothing is invented.** No sample sponsors, no testimonials, no impressions,
+  no attendance figures, no placeholder email address. Where a fact has not
+  been supplied — the portrait, the acceptance screenshot, the budget split —
+  the interface renders honestly without it and accepts it later through
+  configuration. `npm run preflight` lists exactly what is missing.
+- **The retired auction is dormant, not deleted.** Every payment module is
+  gated behind `CAMPAIGN_MODE=auction` and marked `FUTURE / DISABLED`.
+
+Start at [docs/13 — Brand the Case](docs/13-brand-the-case.md).
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -15,15 +37,14 @@ and blue for the primary action.
 
 ```bash
 npm install
-cp .env.example .env      # every value already has a working local default
-npm run setup             # apply the Supabase migration
+cp .env.example .env      # set SUPABASE_URL and SUPABASE_SECRET_KEY
+npm run setup             # apply the Supabase migrations
 npm run dev               # http://localhost:3000
 ```
 
-That is the whole setup. **No Safepay account is needed for local development**
-— with the keys blank the payment layer runs in `mock` mode and the full bid
-flow works end to end locally. See [docs/06-payments.md](docs/06-payments.md)
-to connect Safepay after onboarding.
+The homepage renders **without a database**: no confirmed sponsorships means an
+unfunded campaign with all twenty placements open, which is the truth on day
+one. Supabase is needed to store an inquiry and to record sponsorships.
 
 | Command | What it does |
 | --- | --- |
@@ -32,7 +53,8 @@ to connect Safepay after onboarding.
 | `npm start` | Serve the production build |
 | `npm test` | Run the Vitest suite |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run db:migrate` | Apply the Supabase schema migration |
+| `npm run preflight` | Report what the current environment would do in production |
+| `npm run db:migrate` | Apply Supabase migrations |
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -41,62 +63,89 @@ to connect Safepay after onboarding.
 ```
 src/
   app/
-    page.tsx                  server component; reads the board, renders the page
-    layout.tsx                Inter via next/font, metadata
+    page.tsx                  the campaign, in conversion order
+    layout.tsx                metadata, Inter, optional analytics script
+    opengraph-image.tsx       the share card — type only, no logos
     globals.css               the whole design system, one file, no framework
-    success/page.tsx          Safepay Hosted Checkout return page
-    api/board/route.ts        GET  the whole auction in one payload
-    api/bids/route.ts         POST place a bid, open a deposit checkout
-    api/webhooks/safepay/     POST the only path that can make a bid live
+    privacy/page.tsx          what is collected and why
+    terms/page.tsx            non-binding, no payment, independent
+    api/sponsorship-requests/ POST — the one live endpoint
+    api/bids/                 FUTURE / DISABLED — 404 in interest mode
+    api/board/                FUTURE / DISABLED — 404 in interest mode
+    api/webhooks/safepay/     FUTURE / DISABLED — 503 in interest mode
+    success/page.tsx          FUTURE / DISABLED — notFound() in interest mode
   components/
-    AuctionProvider.tsx       shared board state + the modal host
-    CaseHero.tsx              centred hero: stats, headline, funding, the case
+    CampaignProvider.tsx      one snapshot, one form, every entry point
+    Hero.tsx                  headline, offer, funding bar
+    FundingProgress.tsx       confirmed money only
+    Founder.tsx               who is carrying the case + acceptance proof
+    Packages.tsx              the three tiers
+    CaseSection.tsx           the 3D case + the same panels as buttons
     CaseStage.tsx             rotation model, drag, face switcher
-    BidModal.tsx              the bid form
-    InventorySection.tsx      the 20 panels as filterable cards
-    TickerSection.tsx         recent-bid feed
-    Sections.tsx              static server-rendered editorial sections
-    three/
-      CaseCanvas.tsx          the <Canvas>, dynamically imported (ssr: false)
-      CaseScene.tsx           lights, environment, the spin rig, contact shadows
-      CaseModel.tsx           the case, built from primitives — no .glb
-      Panel.tsx               one brandable panel, with hover lift
-      panelTexture.ts         draws each panel's chip to a canvas texture
+    SponsorshipModal.tsx      the inquiry form
+    Sections.tsx              server-rendered editorial sections
+    SponsorButton.tsx         the CTA, wherever it appears
+    TrackedLink.tsx           an external link that reports an event
+    Nav.tsx                   sticky nav
+    three/                    the case: canvas, scene, model, panels, textures
   data/
-    placements.ts             THE PANEL MAP — geometry, pricing, copy
-    site.ts                   campaign copy, tour, FAQ, specs
+    placements.ts             THE PANEL MAP — geometry and print sizes
+    sponsorship.ts            THE OFFER — tiers, prices, panel assignment, goal
+    site.ts                   campaign copy, founder, FAQ, budget, disclosures
+    internal-index.ts         FUTURE / DISABLED — the retired price ladder
   lib/
-    auction.ts                joins static panels to live bids
-    money.ts                  deposits, minimum increments, formatting
-    payments.ts               Safepay live/mock payment backend
-    payment-events.ts         idempotent webhook ledger
-    refunds.ts                durable deposit-refund processing
+    funding.ts                confirmed sponsorships -> funding + sponsor list
+    placement-board.ts        panels + tiers + confirmed rows -> the board
+    sponsorship.ts            the inquiry service and its availability checks
+    analytics.ts              conversion events, no dependency, no cookie
     validation.ts             Zod request schemas
-    db.ts                     live-bid status constants
+    rate-limit.ts             small in-process throttle
     supabase.ts               server-only Supabase client and database types
+    campaign.ts               the one campaign-mode switch
+    payments.ts auction.ts    FUTURE / DISABLED
+    money.ts refunds.ts       FUTURE / DISABLED
+    payment-events.ts db.ts   FUTURE / DISABLED
 supabase/
-  migrations/                 canonical Supabase schema and settlement RPC
-docs/                         the documentation set — start at 01-overview.md
-tests/                        Vitest: panel geometry and money rules
+  migrations/                 canonical schema
+scripts/
+  preflight.mjs               production configuration check
+  gen-panel-table.mts         regenerates the sponsor-kit table
+docs/                         start at 13, then 01
+tests/                        Vitest: geometry, funding, validation, guards
 ```
 
 <!-- ------------------------------------------------------------------ -->
 
-## The two ideas worth knowing
+## The four ideas worth knowing
 
-**1. The panel map is one file.** `src/data/placements.ts` holds the geometry,
-the price, the print size, and the sales copy for all twenty panels. The 3D
-scene, the inventory grid, the bid modal, the API validation, and the sponsor
-kit all read from it. A panel physically cannot drift between what is rendered,
-what is sold, and what is fabricated. `tests/panels.test.ts` proves no panel
-overhangs its face and no two panels on a face overlap — that test caught a real
-collision between panels 07 and 08 during the build.
+**1. The panel map is one file; the offer is another.**
+`src/data/placements.ts` holds the geometry, print size and copy for all twenty
+placements — nothing commercial. `src/data/sponsorship.ts` holds the tiers,
+the prices and which panels belong to which tier. The 3D scene, the panel grid,
+the form, the API validation and the sponsor kit all read from those two, so a
+placement cannot drift between what is rendered, what is offered and what is
+fabricated. `tests/panels.test.ts` proves no placement overhangs its face and no
+two on a face overlap — that test caught a real collision between 07 and 08.
 
-**2. Panels are hardware, bids are data.** The twenty panels are fixed physical
-areas on a real shell, so they are typed constants, not database rows. The
-Supabase holds bids plus a private payment-webhook ledger, and the "current
-state" of a panel is derived: the highest bid whose deposit has settled. See
-[docs/03-data-model.md](docs/03-data-model.md).
+**2. Only confirmed money is money.** `summariseFunding()` is a pure function
+over confirmed sponsorships; `tests/funding.test.ts` sweeps what counts and what
+does not. A confirmed row with no amount cannot exist — the database rejects it
+— and a sponsor is named on the page only where `display_permission` is true
+and a display name was entered deliberately.
+
+**3. The server owns availability.** A browser can suggest a panel; only the
+server decides. The inquiry endpoint re-reads confirmed sponsorships before
+accepting anything, refuses a panel that is taken and refuses a panel that is
+not in the tier being bought. Underneath that, a partial unique index makes two
+CONFIRMED rows on one panel impossible at the database level.
+
+**4. Payments fail closed, three deep.** Mock payments are useful locally and
+catastrophic in front of a real visitor: they say money moved when it did not.
+Reaching mock mode requires an explicit auction campaign, a non-production
+`NODE_ENV`, **and** no credentials at all. `resolvePaymentMode()` is a pure
+function so `tests/campaign.test.ts` can sweep the entire cross-product, and
+`tests/api-guards.test.ts` calls the route handlers themselves so a guard
+cannot be deleted while unit tests stay green.
 
 <!-- ------------------------------------------------------------------ -->
 
@@ -104,35 +153,55 @@ state" of a panel is derived: the highest bid whose deposit has settled. See
 
 | | |
 | --- | --- |
-| [01 — Overview](docs/01-overview.md) | What the product is and the rules of the auction |
+| [13 — Brand the Case](docs/13-brand-the-case.md) | **Start here.** The campaign, the sponsorship model, operations, deployment, open TODOs |
+| [01 — Overview](docs/01-overview.md) | What the product is and how it is sold |
 | [02 — Architecture](docs/02-architecture.md) | Stack, rendering strategy, request flow |
-| [03 — Data model](docs/03-data-model.md) | Bid, payment, refund, and webhook state |
+| [03 — Data model](docs/03-data-model.md) | The sponsorship table and its access boundary |
 | [04 — API reference](docs/04-api.md) | Every endpoint, with request and response shapes |
 | [05 — The 3D case](docs/05-the-3d-case.md) | Geometry, the coordinate system, the rotation model |
-| [06 — Payments](docs/06-payments.md) | Deposits, mock vs live, webhooks, going live |
+| [06 — Payments](docs/06-payments.md) | FUTURE / DISABLED — the mode matrix and dormant provider |
 | [07 — Design system](docs/07-design-system.md) | Tokens, type scale, component patterns |
-| [08 — Deployment](docs/08-deployment.md) | Postgres, env vars, hosting, checklist |
-| [09 — Sponsor kit](docs/09-sponsor-kit.md) | Artwork spec and the full panel table |
-| [10 — Supabase migration](docs/10-supabase-migration.md) | Runtime database boundary and rollout |
-| [11 — Safepay integration plan](docs/11-safepay-integration-plan.md) | Provider setup, webhook, refund, and live gates |
+| [08 — Deployment](docs/08-deployment.md) | Env vars, migrations, hosting, launch checklist |
+| [09 — Sponsor kit](docs/09-sponsor-kit.md) | Artwork spec and the full placement table |
+| [10 — Supabase boundary](docs/10-supabase-migration.md) | Runtime database boundary and rollout |
+| [11 — Safepay integration plan](docs/11-safepay-integration-plan.md) | FUTURE / DISABLED — provider setup for a later phase |
+| [12 — Founding Edition launch](docs/12-founding-edition-launch.md) | LEGACY — the previous inquiry-only model, superseded by 13 |
+
+Documents 01–12 were written for the previous CODEC ONE model. Their geometry,
+architecture, 3D and design material still applies; anything they say about
+pricing, tiers, availability or the campaign story is superseded by 13.
 
 <!-- ------------------------------------------------------------------ -->
 
-## Before this goes public — read this
+## Before this goes public
 
-Two things in this repo are placeholders and **must** be dealt with first.
+Everything below is a decision only Haseeb can make. `npm run preflight` prints
+the same list against whatever environment you run it in.
 
-**The old seeded sponsors were invented and are gone.** The application no
-longer seeds local SQLite data. The board is empty until real bid rows are
-written to Supabase; never add invented companies as real sponsors.
+**A real contact inbox.** Set `NEXT_PUBLIC_CONTACT_EMAIL`. Until it is set the
+site shows no email address and points people at the form — a working fallback,
+but not what you want on a page you are cold-emailing from. It is deliberately
+not a placeholder: a fake-looking address on a sponsorship page is worse than
+none.
 
-**There is no affiliation with anyone.** The copy throughout is written as
-attendance, not endorsement: the case *goes to* these events the way any
-attendee does. Nothing claims that OpenAI, Anthropic, or any conference
-organiser sponsors, endorses, or is affiliated with this campaign, because none
-of them do. That framing is deliberate and load-bearing — claiming an
-affiliation you do not have is a trademark problem and the fastest way to lose a
-sponsor's trust. If you edit the copy in `src/data/site.ts`, keep it that way.
+**A portrait, and profile links.** `NEXT_PUBLIC_FOUNDER_PHOTO` plus any of the
+GitHub / LinkedIn / X / website URLs. Without them the founder card shows a
+monogram and nothing a sponsor can check you against.
+
+**The acceptance proof.** `NEXT_PUBLIC_ACCEPTANCE_PROOF_IMAGE`, if you choose
+to publish a redacted screenshot. Do not point it at anything carrying OpenAI
+branding you have not established you may reproduce. Unset, the card offers the
+confirmation privately, which is honest and enough.
+
+**The budget.** `NEXT_PUBLIC_BUDGET_*_USD`, once flights and accommodation are
+actually quoted. Unset, the section lists the categories and says the split is
+not published yet. Do not put a number there you have not costed.
+
+**Legal identity and review.** `/privacy` and `/terms` name no registered
+company, address, jurisdiction or registration number, because none has been
+supplied to this repository. They are practical launch copy describing what the
+application actually does — not a claim that legal review has occurred. The
+refund and cancellation terms that bind are the ones written on the invoice.
 
 ## Licence
 

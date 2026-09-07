@@ -1,223 +1,154 @@
 # 04 — API reference
 
-Three endpoints. All JSON. No authentication — bidding is deliberately open, and
-the only state-changing endpoint is gated by a card payment.
+> **LEGACY request shape.** `POST /api/sponsorship-requests` is still the one
+> live endpoint, but its body changed with the sponsorship model: it now takes
+> `tier` (required), an optional `placementId`, `contactName` and `companyUrl`
+> (both required) and `socialUrl`, and no longer takes `budgetRange`. The
+> authority is `src/lib/validation.ts`; the flow is in
+> [13 — Brand the Case](13-brand-the-case.md). The dormant endpoints below are
+> unchanged.
+
+One live endpoint. Three dormant ones that answer 404 or 503 in the shipped
+configuration.
+
+All JSON. No authentication — sending a placement request is deliberately open,
+and the endpoint writes an inquiry, not an order.
 
 ---
 
-## `GET /api/board`
+## `POST /api/sponsorship-requests`
 
-The entire auction in one payload: every panel with its live bid, the funding
-stats, and the recent-bid ticker.
+Record a non-binding placement request. This is the only state-changing
+endpoint on the Founding Edition site.
 
-Called on page load by the server component, and refetched by the client after a
-successful bid so the 3D case, the inventory grid and the funding bar all update
-from one source.
-
-`Cache-Control: no-store`.
-
-### Response `200`
-
-```jsonc
-{
-  "panels": [
-    {
-      // --- from the static panel map ---
-      "id": "01",
-      "code": "FR-CROWN",
-      "name": "The Crown",
-      "face": "front",                  // front | right | back | left | top
-      "description": "Full-width crown band above the medallion…",
-      "openingBidUsd": 48000,
-      "u": 0, "v": 0.4, "w": 0.62, "h": 0.13,   // face-local geometry, metres
-      "sizeLabel": "62 x 13 cm",
-
-      // --- derived from live bids ---
-      "currentBidUsd": 64500,           // null when the panel is open
-      "sponsor": "Northbeam Labs",      // null when the panel is open
-      "sponsorUrl": "https://…",        // null if not supplied
-      "bidCount": 1,                    // live bids only
-      "minimumBidUsd": 67800,           // what POST /api/bids will accept next
-      "minimumDepositUsd": 13560,
-      "taken": true
-    }
-    // … 20 total, always in panel-map order
-  ],
-
-  "stats": {
-    "raisedUsd": 297500,
-    "goalUsd": 500000,
-    "reserveFloorUsd": 327000,          // sum of all opening bids
-    "percentOfGoal": 59.5,
-    "panelsTaken": 13,
-    "panelsTotal": 20,
-    "bidsPlaced": 13
-  },
-
-  "recent": [
-    {
-      "company": "Sundial Interfaces",
-      "placementId": "19",
-      "placementName": "Lid Crown",
-      "amountUsd": 28000,
-      "createdAt": "2026-08-30T14:02:11.000Z"
-    }
-    // … up to 8, newest first
-  ]
-}
-```
-
----
-
-## `POST /api/bids`
-
-Place a bid on a panel and open a deposit checkout.
+It takes no payment, collects no payment credential, and does not change what
+the public board says is available.
 
 ### Request
 
 ```jsonc
 {
-  "placementId": "07",                   // required, must be a known panel id
-  "company": "Northbeam Labs",           // required, 2–80 chars
-  "contactEmail": "partners@example.com",// required, valid email, lowercased
-  "amountUsd": 11500,                    // required, positive integer, max 5,000,000
-  "websiteUrl": "https://example.com",   // optional, must be a full URL
-  "message": "Anything we should know"   // optional, max 500 chars
+  "placementId": "02",                          // required, must be a known placement
+  "company": "Northbeam Labs",                  // required, 2–120 chars
+  "contactEmail": "partnerships@northbeam.com", // required, valid email, ≤200
+  "contactName": "Ada Okafor",                  // optional, ≤120
+  "websiteUrl": "https://northbeam.com",        // optional, full URL, ≤200
+  "budgetRange": "2_5K_5K",                     // optional, one of six bands
+  "message": "We'd like the medallion…",        // optional, ≤2000
+  "acknowledged": true,                         // required, must be exactly true
+  "companyFax": ""                              // honeypot, must be empty
 }
 ```
+
+**Budget bands** — `UNDECIDED`, `UNDER_1K`, `1K_2_5K`, `2_5K_5K`, `5K_10K`,
+`OVER_10K`. These are a qualification signal, not a price list, and are never
+tied to a particular placement.
+
+**`acknowledged`** is the "I understand this is a sponsorship inquiry and does
+not reserve or purchase the placement" checkbox. `z.literal(true)` — `"true"`,
+`1` and `false` are all rejected.
+
+**`companyFax`** is a honeypot, hidden off-screen in the form. Any value is a
+hard reject; an empty string is stripped and never stored.
+
+Unknown keys are stripped by Zod, so a client cannot smuggle an amount into the
+row even by sending one.
 
 ### Response `201`
 
 ```jsonc
 {
-  "bidId": "cmtfq3nxu0000u7vo4mwu4c2d",
-  "placementId": "07",
-  "amountUsd": 11500,
-  "depositUsd": 2300,
-  "mode": "mock",                        // "mock" | "live"
-  "redirectUrl": "http://localhost:3000/success?bid=…"
+  "received": true,
+  "paymentTaken": false,
+  "reserved": false,
+  "id": "3f6b0c2a-…"
 }
 ```
 
-In **live** mode `redirectUrl` is a Safepay Hosted Checkout URL and the client must
-navigate to it; the bid is still `PENDING` and becomes live only when the
-webhook fires.
+`paymentTaken` and `reserved` are constants. They are in the payload so that
+any future consumer of this endpoint — a form, a script, a log line — carries
+the same statement the confirmation screen makes.
 
-In **mock** mode the deposit has already settled server-side by the time this
-returns, so the client can simply refetch the board and show success.
+A repeat request for the same placement from the same email inside the 24-hour
+window returns this same body with the existing row's id.
 
-### Response `422` — validation failed
+### Errors
 
-```jsonc
-{
-  "error": "Check the highlighted fields.",
-  "fields": {
-    "placementId": "Unknown panel.",
-    "company": "Company name is required.",
-    "contactEmail": "Enter a valid email address."
-  }
-}
-```
+| Status | Body | When |
+| --- | --- | --- |
+| `400` | `{ error }` | Body was not JSON |
+| `404` | `{ error: "Unknown placement." }` | `placementId` is not in the panel map |
+| `409` | `{ error }` | The placement is no longer open to requests |
+| `422` | `{ error, fields }` | Validation failed. `fields` is keyed by input name and rendered inline by the modal |
+| `429` | `{ error }` + `Retry-After` | Client throttle (8 / 10 min) or per-email cap (5 / 24 h) |
+| `503` | `{ error }` | Supabase could not record the request |
 
-`fields` is keyed by input name so the modal can render each message inline.
+### There is no GET
 
-### Response `409` — outbid between opening the form and submitting
-
-```jsonc
-{
-  "error": "Panel 01 is now at $67,800. Raise your bid to take it.",
-  "fields": { "amountUsd": "Minimum is $67,800." },
-  "minimumBidUsd": 67800
-}
-```
-
-The server re-reads the panel's live state on every request and never trusts a
-price sent by the client. The modal updates the displayed minimum from
-`minimumBidUsd` rather than silently accepting a bid that can no longer win.
-
-### Response `502` — payment provider unavailable
-
-```jsonc
-{ "error": "Could not open the payment step. Please try again." }
-```
-
-In mock or misconfigured mode the pending bid row is deleted before this is
-returned. In live mode it is retained if a Safepay tracker may already exist,
-so a later webhook can reconcile it by bid metadata; `PENDING` never holds a
-panel on the public board.
-
-### Other codes
-
-| Code | Meaning |
-| --- | --- |
-| `400` | Body was not valid JSON |
-| `404` | `placementId` is well-formed but unknown |
+Requests carry other companies' contact details and budget signals. The only
+way to read them is an authorised Supabase session. This is not an oversight;
+do not add a read endpoint without an authentication story.
 
 ---
 
-## `POST /api/webhooks/safepay`
+## FUTURE / DISABLED IN THE FOUNDING EDITION
 
-The only path that can promote a bid to live in production. Runs on the Node
-runtime and reads the raw body — signature verification needs the exact bytes
-Safepay sent, so this route must not pass through any body parser.
+The three endpoints below belong to the retired bid-and-deposit auction. In the
+shipped configuration (`CAMPAIGN_MODE=interest`, the default) they refuse
+before touching Supabase or any payment code. `tests/api-guards.test.ts`
+invokes each handler directly to prove it.
 
-### Headers
+### `POST /api/bids`
 
-`X-SFPY-SIGNATURE` is required and verified with HMAC-SHA512 against
-`SAFEPAY_WEBHOOK_SECRET` before a single field of the payload is read. An
-unsigned request must never be able to hand somebody a panel.
-
-### Events handled
-
-| Event | Effect |
-| --- | --- |
-| `payment.succeeded` | Validates tracker, metadata, USD amount, and currency; marks the bid `DEPOSIT_PAID`, demotes lower live bids, and starts their refunds |
-| `payment.failed` | Records the failed attempt and leaves the pending bid available for checkout retry |
-| `payment.refunded` | Confirms the refund amount and marks the refund state `SUCCEEDED` or `PARTIAL` |
-| `authorization.succeeded`, `authorization.reversed`, `void.succeeded` | Records and acknowledges the event |
-
-Everything else is acknowledged and ignored.
-
-The bid id travels in `metadata.bid_id` and `metadata.order_id`, and the
-Safepay tracker is stored on the bid. The handler can settle exactly one bid and
-never trusts a redirect. `settleDeposit()` and the webhook ledger are
-idempotent, which matters because Safepay retries events.
-
-### Responses
-
-| Code | Meaning |
-| --- | --- |
-| `200` | `{ "received": true }` |
-| `400` | Missing or invalid signature |
-| `500` | Supabase ledger or webhook business logic failed; Safepay should retry |
-| `503` | `SAFEPAY_WEBHOOK_SECRET` is not configured |
-
-### Local testing
-
-```bash
-# Use a public HTTPS tunnel for the local app, then add this URL in the
-# Safepay sandbox dashboard under Developers > Endpoints.
-https://your-public-domain.example/api/webhooks/safepay
+```jsonc
+// Shipped configuration, any body:
+404 { "error": "Not found." }
 ```
 
----
+Guarded twice: first on `auctionEndpointsEnabled()`, then on
+`paymentsEnabled()`. With `CAMPAIGN_MODE=auction` but no usable payment
+backend it answers `503` rather than recording a bid that could never settle.
 
-## Trying it from the shell
+Under an explicit auction with live credentials it validates the body, re-reads
+the panel's live state, rejects anything below the current server-side minimum
+with `409`, writes a `PENDING` bid, and opens a deposit checkout. The bid holds
+no claim on the panel until a verified webhook settles it.
 
-```bash
-# read the board
-curl -s localhost:3000/api/board | jq '.stats'
+### `GET /api/board`
 
-# a bid below the minimum → 409
-curl -s -X POST localhost:3000/api/bids \
-  -H 'Content-Type: application/json' \
-  -d '{"placementId":"01","company":"Test Co","contactEmail":"a@b.com","amountUsd":50000}'
-
-# a valid bid on an open panel → 201
-curl -s -X POST localhost:3000/api/bids \
-  -H 'Content-Type: application/json' \
-  -d '{"placementId":"10","company":"Test Co","contactEmail":"a@b.com","amountUsd":8000}'
+```jsonc
+// Shipped configuration:
+404 { "error": "Not found." }
 ```
+
+Returned the full auction payload — every panel with its live bid, the funding
+stats, and the recent-bid ticker. No bid amount, sponsor name or funding figure
+is readable from the live site.
+
+The Founding Edition board is static and server-rendered from
+`src/lib/placement-board.ts`. It has no JSON endpoint because the browser has
+nothing to refetch.
+
+### `POST /api/webhooks/safepay`
+
+```jsonc
+// Shipped configuration:
+503 { "error": "Safepay webhooks are not enabled for this deployment." }
+```
+
+`webhookIsConfigured()` now requires the payment mode to be `live`, which in
+turn requires `CAMPAIGN_MODE=auction`. A webhook secret left in an environment
+cannot reopen the settlement path on its own.
+
+Under an explicit auction it verifies the raw body with HMAC-SHA512 against
+`X-SFPY-SIGNATURE` before parsing, records the event token for idempotency, and
+only then settles. See [06 — Payments](06-payments.md).
+
+### `GET /success`
+
+Calls `notFound()` unless `CAMPAIGN_MODE=auction`. It was the Safepay checkout
+return page; a page that says "deposit received" must not be reachable on a
+site that takes no payment.
 
 ---
 

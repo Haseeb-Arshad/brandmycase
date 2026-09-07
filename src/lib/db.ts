@@ -1,3 +1,4 @@
+/** FUTURE / DISABLED IN THE FOUNDING EDITION: retired auction bid states. */
 /** Bid states that count as a live claim on a panel. */
 export const LIVE_BID_STATUSES = ["DEPOSIT_PAID", "WON"] as const;
 

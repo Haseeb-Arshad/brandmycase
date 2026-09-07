@@ -1,9 +1,145 @@
 # 03 — Data model
 
-## Auction and payment state
+> **LEGACY — describes the table before the sponsorship migration.** The
+> current schema, its new columns, its status vocabulary and the constraints
+> that protect the funding bar are documented in
+> [13 — Brand the Case](13-brand-the-case.md), and the canonical source is
+> `supabase/migrations/20260908000000_sponsorship_campaign.sql`.
+
+The Founding Edition has one live table. Everything else in the schema belongs
+to the dormant auction phase and is documented at the end.
+
+## `sponsorship_requests` — the only live table
 
 ```sql
--- Full source: supabase/migrations/20260831000000_create_bids.sql
+-- Full source: supabase/migrations/20260905000000_create_sponsorship_requests.sql
+create table public.sponsorship_requests (
+  id            uuid primary key default gen_random_uuid(),
+  placement_id  text not null,
+  company       text not null,
+  contact_name  text,
+  contact_email text not null,
+  website_url   text,
+  budget_range  text,          -- one of six bands, or null
+  message       text,
+  status        text not null default 'NEW',
+  created_at    timestamptz not null default timezone('utc', now()),
+  updated_at    timestamptz not null default timezone('utc', now())
+);
+```
+
+These rows are **expressions of interest, not orders**. There is no amount
+column, no payment column and no reservation column, because none of those
+things exist in this campaign. A row records that a company asked about a
+placement. Nothing more.
+
+### Access
+
+The table holds other companies' contact details and budget signals, so it is
+server-only by construction:
+
+- RLS is enabled with **no policy** — a non-service role sees zero rows even if
+  a grant were added by mistake;
+- `anon` and `authenticated` are explicitly revoked; only `service_role` is
+  granted;
+- the application publishes **no GET endpoint** for it.
+
+The only way to read a request is an authorised Supabase session.
+
+### Status lifecycle
+
+A checked string rather than a Postgres enum, so it stays portable.
+
+```
+        POST /api/sponsorship-requests
+                      │
+                      ▼
+                  ┌───────┐
+                  │  NEW  │  received, not yet read
+                  └───┬───┘
+                      │  operator replies
+                      ▼
+              ┌─────────────┐
+              │  CONTACTED  │
+              └──────┬──────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+ ┌─────────────┐         ┌──────────┐
+ │  QUALIFIED  │         │ DECLINED │
+ └──────┬──────┘         └──────────┘
+        │  written terms agreed by both parties, off-site
+        ▼
+   ┌──────────┐
+   │  AGREED  │
+   └──────────┘
+```
+
+`AGREED` records that a sponsorship agreement exists. It does **not** change
+what the site shows: availability is edited by hand in
+`src/data/placements.ts`, and that is a separate, deliberate act. See
+[12 — Founding Edition launch](12-founding-edition-launch.md).
+
+### Rate limiting and duplicates
+
+Two layers, both cheap:
+
+1. **In-process** (`src/lib/rate-limit.ts`) — a Map of recent hits per client
+   key, 8 requests per 10 minutes. A speed bump that absorbs a burst; it does
+   not survive a restart and is not treated as a security control.
+2. **Durable** (`src/lib/sponsorship.ts`) — a count of rows with the same
+   `contact_email` in the last 24 hours, capped at 5. This one survives
+   restarts and multiple instances.
+
+A repeat request for the *same* placement from the same address inside the
+window returns the existing row's id and is reported to the browser as
+received. A double-click is not an error.
+
+### `placement_id` is not a foreign key
+
+There is no placement table to point at — the twenty placements are typed
+constants. `z.enum(placementIds)`, generated from `PLACEMENTS`, rejects an
+unknown id at the API boundary before any write, and
+`createSponsorshipRequest()` re-checks it against the server's own map. See
+[02 — Architecture](02-architecture.md#why-placements-are-not-in-the-database).
+
+## Derived placement state
+
+A placement's public state is not stored in Postgres at all.
+`getPlacementBoard()` derives it synchronously from `src/data/placements.ts`:
+
+```ts
+statusLabel = PLACEMENT_STATUS_LABELS[placement.status];
+requestable = REQUESTABLE_STATUSES.includes(placement.status);
+tierLabel   = TIER_LABELS[placement.tier];
+```
+
+`PlacementState` deliberately carries no price, no bid, no sponsor name and no
+deposit. Nothing serialised to the browser can leak a monetary value because no
+monetary value is put on the wire in the first place —
+`tests/panels.test.ts` serialises the board and asserts it.
+
+## Seeding
+
+There is no seed script and there never will be one. No fictional sponsor,
+request or agreement may be written to any environment. The board ships with
+all twenty placements `OPEN`, and a test enforces it.
+
+---
+
+## FUTURE / DISABLED IN THE FOUNDING EDITION — auction schema
+
+`public.bids` and `public.payment_webhook_events` are created by the two 2026-08-31
+migrations and belong to the retired bid-and-deposit phase. They are unused:
+nothing on the public site reads or writes them, and every route that could is
+gated behind `CAMPAIGN_MODE=auction`.
+
+They are kept because the settlement RPC and the webhook ledger are real,
+carefully built work — an atomic `settle_bid` that promotes a bid and demotes
+whoever it beat in one commit, and an idempotency ledger keyed on the provider
+event token. Re-deriving that later would be worse than carrying it dormant.
+
+```sql
 create table public.bids (
   id text primary key,
   placement_id text not null,
@@ -13,8 +149,8 @@ create table public.bids (
   message text,
   amount_usd integer not null,
   deposit_usd integer not null,
-  status text not null default 'PENDING',
-  payment_provider text not null default 'mock',
+  status text not null default 'PENDING',   -- PENDING | DEPOSIT_PAID | OUTBID
+  payment_provider text not null,            -- | WON | REFUNDED | REJECTED
   payment_ref text,
   payment_currency text not null default 'USD',
   payment_amount_minor integer,
@@ -30,119 +166,14 @@ create table public.bids (
 );
 ```
 
-The private `payment_webhook_events` table stores provider event ids, payloads,
-processing status, and errors for idempotent webhook handling. Panels are typed constants in
-`src/data/placements.ts` — see [02 — Architecture](02-architecture.md#why-panels-are-not-in-the-database).
+If you are applying migrations to a fresh project and have no intention of ever
+running an auction, these two migrations can be skipped: the
+`sponsorship_requests` migration recreates `set_updated_at()` idempotently and
+does not depend on them. Do not drop them from an existing project without
+checking there is nothing in them.
 
-`placementId` is intentionally not a foreign key: there is no panel table to
-point at. It is validated by `z.enum(placementIds)` at the API boundary, which
-is generated from `PLACEMENTS`, so an unknown id is rejected with a 422 before
-any write.
-
-## Money is always integer dollars
-
-Every amount in the system is a whole-dollar `Int`. There are no floats and no
-cents anywhere except one function, `toPaymentAmount()`, which converts at the
-Safepay boundary. Bids on physical panels are never fractional, and integers make
-every comparison in the auction exact.
-
-## Bid lifecycle
-
-Postgres uses a checked string rather than an enum, so `status` remains portable. These are the only
-legal values and transitions:
-
-```
-                    POST /api/bids
-                          │
-                          ▼
-                     ┌─────────┐
-                     │ PENDING │  written, deposit not yet captured.
-                     └────┬────┘  Holds NO claim on the panel.
-                          │
-        ┌─────────────────┼──────────────────┐
-        │ deposit settles │                  │ checkout expires
-        ▼                 │                  ▼
- ┌──────────────┐         │              (row deleted)
- │ DEPOSIT_PAID │◄────────┘
- └──────┬───────┘  live. This is the bid the board shows.
-        │
-        ├──── a higher bid settles ────►  ┌────────┐
-        │                                 │ OUTBID │ → refund_status SUCCEEDED
-        │                                 └────────┘
-        │
-        ├──── operator declines brand ──►  REJECTED  (deposit returned in full)
-        │
-        └──── auction closes in favour ─►  ┌─────┐
-                                           │ WON │ balance charged after proof
-                                           └─────┘
-```
-
-`LIVE_BID_STATUSES` in `src/lib/db.ts` is `["DEPOSIT_PAID", "WON"]` — the two
-states that count as a live claim on a panel. Every board query filters on it.
-
-## Derived panel state
-
-A panel's "current bid" is not stored. It is the highest live bid:
-
-```ts
-const leader = bids                                  // ordered amountUsd desc
-  .filter(b => LIVE_BID_STATUSES.includes(b.status))
-  [0] ?? null;
-
-currentBidUsd = leader?.amountUsd ?? null;
-sponsor       = leader?.company   ?? null;
-taken         = leader !== null;
-minimumBidUsd = minimumNextBid(placement.openingBidUsd, currentBidUsd);
-```
-
-Deriving rather than storing means there is no denormalised field to fall out of
-sync, and the bid *history* is real rows rather than a counter — the "11 bids"
-on a panel is `bids.length`, not a number someone incremented.
-
-## The one transaction that matters
-
-`settleDeposit()` promotes a bid and demotes whoever it beat, atomically:
-
-```ts
-await supabase.rpc("settle_bid", {
-  p_bid_id: bidId,
-  p_payment_ref: paymentRef,
-});
-```
-
-Two properties worth noting:
-
-**It is idempotent.** The `status !== "PENDING"` guard means calling it twice is
-a no-op. Safepay retries webhooks, so this matters in production.
-
-**It is atomic.** Marking the new leader live and the old leader outbid happen
-in one commit. Split across two statements, a reader between them would see
-either two live leaders or none.
-
-## Concurrency
-
-Two bidders racing on the same panel is handled by ordering, not locking:
-
-1. Both bids are written as `PENDING`. Neither holds the panel.
-2. Whichever deposit settles first becomes `DEPOSIT_PAID`.
-3. When the second settles, its `updateMany` marks the first `OUTBID` if the
-   second is higher — or, if the second is *lower*, the first stays live and the
-   second is superseded on the next settle.
-
-The `amountUsd: { lte: bid.amountUsd }` filter is what makes step 3 safe: a
-settling bid only outbids amounts at or below its own. A lower late-settling bid
-cannot dethrone a higher live one.
-
-The remaining sharp edge is that a lower bid can still settle and briefly show
-as live if it settles after a higher bid that was never paid. Since unpaid bids
-never reach `DEPOSIT_PAID`, this does not occur in practice.
-
-## Seeding
-
-There is no seed script. The retired local fixture contained fictional sponsor
-names and was removed so a fresh setup cannot publish invented auction data.
-Use the Supabase dashboard or an authorized migration/operations path to
-inspect real rows; do not add demo sponsors to production.
+Details of the retired settlement and refund model are in
+[06 — Payments](06-payments.md), also marked dormant.
 
 ---
 
