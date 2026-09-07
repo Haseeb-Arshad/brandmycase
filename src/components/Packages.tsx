@@ -31,8 +31,11 @@ export function Packages() {
             Three ways to come along.
           </h2>
           <p className="lede">
-            Fixed prices, invoiced properly, no auction and no negotiation theatre.
-            Pick a tier — you can choose the exact panel on the case afterwards.
+            {/* Deliberately does not use the word "auction", even to deny one.
+                A cold-email visitor has never heard of the previous version of
+                this site, and denying a thing introduces it. */}
+            Fixed prices, invoiced properly, no negotiation theatre. Pick a tier —
+            you can choose the exact panel on the case afterwards.
           </p>
         </div>
 
