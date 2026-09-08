@@ -140,6 +140,25 @@ if (Boolean(analyticsSrc) !== Boolean(analyticsDomain)) {
   );
 }
 
+const posthogKey = value("NEXT_PUBLIC_POSTHOG_KEY");
+if (posthogKey) {
+  notes.push(`analytics:    PostHog (${value("NEXT_PUBLIC_POSTHOG_HOST") ?? "us.i.posthog.com"})`);
+  if (!/^phc_/.test(posthogKey)) {
+    warnings.push(
+      `NEXT_PUBLIC_POSTHOG_KEY does not look like a PostHog project key (expected it to start with "phc_"). ` +
+        "A personal API key must never go in a NEXT_PUBLIC_* variable — it ships to the browser.",
+    );
+  }
+  if (/^phx_/.test(posthogKey) || posthogKey.length > 60) {
+    errors.push(
+      "NEXT_PUBLIC_POSTHOG_KEY looks like a personal/secret API key rather than a public project key. " +
+        "NEXT_PUBLIC_* values are readable by every visitor.",
+    );
+  }
+} else if (!analyticsSrc) {
+  notes.push("analytics:    none configured (no third-party request, no cookie)");
+}
+
 // --- What the owner still has to supply ------------------------------------
 //
 // None of these are errors. Each one is something the interface renders

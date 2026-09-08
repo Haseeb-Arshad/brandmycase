@@ -126,13 +126,15 @@ export function SponsorshipModal({
   const chooseTier = (next: TierId) => {
     setTier(next);
     setPlacement((current) => (current && current.tier === next ? current : null));
-    // Move the offer to the new tier's price — unless they have deliberately
-    // typed something bigger, which is not a number to overwrite.
-    const price = TIER_BY_ID[next].priceUsd;
-    setAmount((current) => {
-      const n = Number(current.replace(/[$,\s]/g, ""));
-      return Number.isFinite(n) && n > price ? current : String(price);
-    });
+    // Picking a tier always sets the offer to that tier's price.
+    //
+    // An earlier version kept a larger figure on the theory that it was
+    // deliberate, which meant clicking "fund the whole trip" and then Supporter
+    // left $3,000 sitting above a $250 tier — the control said one thing and
+    // the number said another. Whatever the sponsor clicks last is what they
+    // meant; if they want more than the tier price they can type it, and that
+    // typing is never overwritten because nothing but this handler touches it.
+    setAmount(String(TIER_BY_ID[next].priceUsd));
   };
 
   const onKeyDown = useCallback(

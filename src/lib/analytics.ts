@@ -38,34 +38,41 @@ export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
 export type AnalyticsProps = Record<string, string | number | boolean>;
 
 interface AnalyticsGlobals {
+  posthog?: { capture: (event: string, props?: AnalyticsProps) => void };
   plausible?: (event: string, options?: { props?: AnalyticsProps }) => void;
   fathom?: { trackEvent: (event: string) => void };
   umami?: { track: (event: string, props?: AnalyticsProps) => void };
 }
 
+/**
+ * Send an event to every provider that is actually loaded.
+ *
+ * Every send is individually wrapped: one provider throwing must not stop the
+ * next one, and none of them may take a sponsorship form down with them.
+ */
 export function track(event: AnalyticsEvent, props?: AnalyticsProps): void {
   if (typeof window === "undefined") return;
 
   const w = window as unknown as AnalyticsGlobals;
+  let delivered = false;
 
-  try {
-    if (typeof w.plausible === "function") {
-      w.plausible(event, props ? { props } : undefined);
-      return;
+  const send = (fn: () => void) => {
+    try {
+      fn();
+      delivered = true;
+    } catch {
+      // Analytics must never be able to break a sponsorship form.
     }
-    if (w.umami?.track) {
-      w.umami.track(event, props);
-      return;
-    }
-    if (w.fathom?.trackEvent) {
-      w.fathom.trackEvent(event);
-      return;
-    }
-  } catch {
-    // Analytics must never be able to break a sponsorship form.
+  };
+
+  if (w.posthog?.capture) send(() => w.posthog!.capture(event, props));
+  if (typeof w.plausible === "function") {
+    send(() => w.plausible!(event, props ? { props } : undefined));
   }
+  if (w.umami?.track) send(() => w.umami!.track(event, props));
+  if (w.fathom?.trackEvent) send(() => w.fathom!.trackEvent(event));
 
-  if (process.env.NODE_ENV === "development") {
+  if (!delivered && process.env.NODE_ENV === "development") {
     console.debug("[analytics]", event, props ?? {});
   }
 }
@@ -81,3 +88,45 @@ export function analyticsScript(): { src: string; domain: string } | null {
   const domain = process.env.NEXT_PUBLIC_ANALYTICS_DOMAIN?.trim();
   return src && domain ? { src, domain } : null;
 }
+
+/**
+ * PostHog, if a project key is configured.
+ *
+ * Loaded from PostHog's CDN rather than the `posthog-js` npm package: the
+ * snippet is a couple of hundred bytes inline and pulls the library
+ * asynchronously, so a visitor who never gets that far never pays for it and
+ * the first paint of the story and the CTA is untouched.
+ */
+export function posthogConfig(): { key: string; host: string } | null {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY?.trim();
+  if (!key) return null;
+  return {
+    key,
+    host: process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim() || "https://us.i.posthog.com",
+  };
+}
+
+/**
+ * How PostHog is initialised, and why.
+ *
+ * This page has a form carrying company names, personal names and work email
+ * addresses. PostHog's autocapture records DOM interactions, and session
+ * recording records the screen — either can pick up what somebody typed into
+ * a sponsorship enquiry. Both are off:
+ *
+ *   autocapture: false          only the named events in ANALYTICS_EVENTS
+ *   disable_session_recording   nobody's typing is filmed
+ *   person_profiles: identified_only
+ *                               nobody is identified, so no person profile is
+ *                               created for an anonymous visitor
+ *
+ * The result is pageviews plus the conversion events this file declares, and
+ * nothing a sponsor typed. Turning any of these on means revisiting the
+ * analytics paragraph on /privacy, which describes exactly this.
+ */
+export const POSTHOG_INIT_OPTIONS = {
+  autocapture: false,
+  disable_session_recording: true,
+  capture_pageview: true,
+  person_profiles: "identified_only",
+} as const;

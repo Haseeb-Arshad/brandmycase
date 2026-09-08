@@ -22,3 +22,6 @@ devday_sponsorship_report.md
 research_progress.json
 sources.csv
 scripts/build-devday-sponsors.mjs
+scripts/harvest-contacts.mjs
+scripts/lib/
+.harvest-cache.json

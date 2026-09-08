@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { ContactLink, SiteFooter } from "@/components/Sections";
 import { FOUNDER, SITE } from "@/data/site";
-import { analyticsScript } from "@/lib/analytics";
+import { analyticsScript, posthogConfig } from "@/lib/analytics";
 
 /**
  * Privacy.
@@ -27,6 +27,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   const analytics = analyticsScript();
+  const posthog = posthogConfig();
 
   return (
     <>
@@ -98,21 +99,43 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="h3">Cookies and analytics</h2>
-            {analytics ? (
-              <p>
-                This site loads a privacy-conscious, cookieless analytics script from{" "}
-                <code>{new URL(analytics.src).hostname}</code>. It counts page views
-                and a small set of interaction events — which section a click came
-                from, which tier was chosen. It sets no cookie, stores no identifier,
-                and is never sent anything you type into the form.
-              </p>
-            ) : (
+
+            {!analytics && !posthog && (
               <p>
                 This site sets no advertising or analytics cookies and loads no
                 third-party tracking script. Analytics can be switched on later
-                through configuration; if it is, it will be a cookieless one and this
-                page will say so.
+                through configuration; if it is, this page changes to describe
+                exactly what is running.
               </p>
+            )}
+
+            {analytics && (
+              <p>
+                This site loads a privacy-conscious, cookieless analytics script from{" "}
+                <code>{new URL(analytics.src).hostname}</code>. It counts page views
+                and a small set of interaction events. It sets no cookie and stores
+                no identifier.
+              </p>
+            )}
+
+            {posthog && (
+              <>
+                <p>
+                  This site uses PostHog (<code>{new URL(posthog.host).hostname}</code>)
+                  to count page views and a small set of interaction events — which
+                  section a click came from, which sponsorship tier was chosen.{" "}
+                  <b>PostHog sets a cookie</b> in your browser to recognise repeat
+                  visits from the same device.
+                </p>
+                <p>
+                  Two things are deliberately switched off. Autocapture, which would
+                  otherwise record every click and form interaction on the page, and
+                  session recording, which would film the screen. That means nothing
+                  you type into the sponsorship form — your name, your email, your
+                  message — is ever sent to PostHog. Only the named events above are,
+                  and they carry a tier or a panel number, never anything personal.
+                </p>
+              </>
             )}
           </section>
 
