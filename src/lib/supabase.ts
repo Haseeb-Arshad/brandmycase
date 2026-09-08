@@ -62,6 +62,9 @@ export type SponsorshipRequestRow = {
   budget_range: string | null;
   message: string | null;
   status: string;
+  /** What the company offered in the form. Never counted as funding. */
+  proposed_amount_usd: number | null;
+  /** What was agreed and paid. Set by the owner. The only figure that counts. */
   amount_usd: number | null;
   display_name: string | null;
   display_logo_url: string | null;
@@ -100,6 +103,7 @@ export interface Database {
           budget_range?: string | null;
           message?: string | null;
           status?: string;
+          proposed_amount_usd?: number | null;
           amount_usd?: number | null;
           display_name?: string | null;
           display_logo_url?: string | null;

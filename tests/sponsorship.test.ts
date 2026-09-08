@@ -141,6 +141,61 @@ describe("sponsorship inquiry schema", () => {
     if (clean.success) expect(clean.data.companyFax).toBeUndefined();
   });
 
+  it("lets a company offer more than the tier price", () => {
+    for (const [input, expected] of [
+      [750, 750],
+      ["750", 750],
+      ["1,500", 1500],
+      [" $3,000 ", 3000],
+    ] as const) {
+      const parsed = sponsorshipInquirySchema.safeParse({
+        ...valid,
+        proposedAmountUsd: input,
+      });
+      expect(parsed.success, `offer ${String(input)} was rejected`).toBe(true);
+      if (parsed.success) expect(parsed.data.proposedAmountUsd).toBe(expected);
+    }
+
+    // Omitting it means "the tier price", which is the common case.
+    const bare = sponsorshipInquirySchema.safeParse(valid);
+    expect(bare.success).toBe(true);
+    if (bare.success) expect(bare.data.proposedAmountUsd).toBeUndefined();
+  });
+
+  it("refuses an offer below the price of the tier being bought", () => {
+    // The tier is what buys the panel. "The Anchor placement for $50" is not a
+    // negotiation, it is a misunderstanding — and the browser must not be the
+    // thing that decides.
+    const low = sponsorshipInquirySchema.safeParse({
+      ...valid,
+      tier: "ANCHOR",
+      proposedAmountUsd: 50,
+    });
+    expect(low.success).toBe(false);
+    if (!low.success) {
+      expect(fieldErrors(low.error).proposedAmountUsd).toMatch(/\$1,000/);
+    }
+
+    // Exactly the tier price is fine; a penny under it is not.
+    expect(
+      sponsorshipInquirySchema.safeParse({ ...valid, tier: "PARTNER", proposedAmountUsd: 500 })
+        .success,
+    ).toBe(true);
+    expect(
+      sponsorshipInquirySchema.safeParse({ ...valid, tier: "PARTNER", proposedAmountUsd: 499 })
+        .success,
+    ).toBe(false);
+  });
+
+  it("refuses an offer that is not whole dollars", () => {
+    for (const bad of [0, -100, 250.5, "lots", "", "1e9999", 2_000_000]) {
+      expect(
+        sponsorshipInquirySchema.safeParse({ ...valid, proposedAmountUsd: bad }).success,
+        `offer ${String(bad)} was accepted`,
+      ).toBe(false);
+    }
+  });
+
   it("has no field through which money or a status could be submitted", () => {
     // These are the fields that decide what the public page says about funding
     // and about who sponsored what. Zod strips unknown keys, so a client cannot
@@ -158,6 +213,9 @@ describe("sponsorship inquiry schema", () => {
     if (!parsed.success) return;
     const keys = Object.keys(parsed.data);
     for (const forbidden of [
+      // `proposedAmountUsd` IS submittable — it is what a company offers. The
+      // fields below are not: they are what the owner records once money has
+      // actually arrived, and they are what the public page reads.
       "amountUsd",
       "status",
       "displayName",
@@ -249,6 +307,19 @@ describe("the migration and the application agree", () => {
   it("makes it impossible for two sponsors to confirm on one panel", () => {
     expect(sql).toContain("create unique index");
     expect(sql).toContain("where status = 'CONFIRMED' and placement_id is not null");
+  });
+
+  it("keeps what was offered separate from what was paid", () => {
+    // Two columns, on purpose. One is written by strangers; one is what the
+    // funding bar sums.
+    const offer = readFileSync(
+      "supabase/migrations/20260909000000_proposed_amount.sql",
+      "utf8",
+    );
+    expect(offer).toContain("proposed_amount_usd");
+    expect(offer).toContain("sponsorship_requests_proposed_amount_check");
+    // It must never be introduced as a replacement for amount_usd.
+    expect(offer).not.toMatch(/drop column\s+.*amount_usd/i);
   });
 
   it("refuses a confirmed sponsorship with no amount behind it", () => {

@@ -80,6 +80,21 @@ describe("funding totals", () => {
     expect(funding.raisedUsd).toBe(500);
   });
 
+  it("ignores what a company offered, and counts only what was agreed", () => {
+    // `proposed_amount_usd` is typed into a public form by somebody who has not
+    // been invoiced and has paid nothing. If it could reach this sum, anyone
+    // with a fetch call could move the number on the homepage. The read in
+    // `readConfirmedSponsorships` does not even select the column, so the only
+    // way this could regress is somebody adding it to ConfirmedSponsorship —
+    // which is exactly what this test is here to catch.
+    const rows = [row({ amountUsd: 500 })] as (ConfirmedSponsorship &
+      Record<string, unknown>)[];
+    rows[0].proposedAmountUsd = 3000;
+    rows[0].proposed_amount_usd = 3000;
+
+    expect(summariseFunding(rows).raisedUsd).toBe(500);
+  });
+
   it("carries the degraded flag through so a failed read is never a claim", () => {
     expect(summariseFunding([], CAMPAIGN_GOAL_USD, true).degraded).toBe(true);
     expect(summariseFunding([]).degraded).toBe(false);

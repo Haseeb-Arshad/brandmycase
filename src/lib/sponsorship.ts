@@ -44,7 +44,7 @@ const EMAIL_LIMIT = 5;
 const EMAIL_WINDOW_HOURS = 24;
 
 export type CreateInquiryResult =
-  | { ok: true; id: string; duplicate: boolean }
+  | { ok: true; id: string; duplicate: boolean; raised?: boolean }
   | {
       ok: false;
       reason:
@@ -91,7 +91,7 @@ export async function createSponsorshipInquiry(
 
   const recent = await supabase
     .from("sponsorship_requests")
-    .select("id, placement_id, tier")
+    .select("id, placement_id, tier, proposed_amount_usd")
     .eq("contact_email", input.contactEmail)
     .gte("created_at", since);
 
@@ -104,6 +104,7 @@ export async function createSponsorshipInquiry(
     id: string;
     placement_id: string | null;
     tier: string | null;
+    proposed_amount_usd: number | null;
   }>;
 
   // Somebody re-sending the same request is almost always a double submit or a
@@ -114,7 +115,33 @@ export async function createSponsorshipInquiry(
       row.tier === input.tier &&
       (row.placement_id ?? null) === (input.placementId ?? null),
   );
-  if (existing) return { ok: true, id: existing.id, duplicate: true };
+
+  if (existing) {
+    // ...unless they came back to offer more. Someone raising their number is
+    // the single most valuable message this form can receive, and silently
+    // returning "already got it" would drop it on the floor. The offer only
+    // ever moves up: a lower figure on a re-submit is treated as the double
+    // click it almost certainly is.
+    const offer = input.proposedAmountUsd;
+    const raised = offer !== undefined && offer > (existing.proposed_amount_usd ?? 0);
+
+    if (raised) {
+      const { error } = await supabase
+        .from("sponsorship_requests")
+        .update({
+          proposed_amount_usd: offer,
+          ...(input.message ? { message: input.message } : {}),
+        })
+        .eq("id", existing.id);
+
+      if (error) {
+        console.error("[sponsorship] raise-offer update failed", error);
+        return { ok: false, reason: "storage" };
+      }
+    }
+
+    return { ok: true, id: existing.id, duplicate: true, raised };
+  }
 
   if (rows.length >= EMAIL_LIMIT) return { ok: false, reason: "rate_limited" };
 
@@ -131,6 +158,9 @@ export async function createSponsorshipInquiry(
     social_url: input.socialUrl ?? null,
     message: input.message ?? null,
     status: INITIAL_STATUS,
+    // What they offered. A stated intention from someone who has not been
+    // invoiced and has paid nothing — it is never summed into funding.
+    proposed_amount_usd: input.proposedAmountUsd ?? null,
     // Deliberately not set here: amount_usd, display_name, display_logo_url,
     // display_permission, confirmed_at. Those are the owner's to fill in once
     // an invoice is actually paid.

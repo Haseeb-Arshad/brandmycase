@@ -1543,6 +1543,87 @@ details p {
   color: var(--ink-3);
 }
 
+/* --- The offer field ------------------------------------------------------ */
+
+.amount-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+/* The dollar sign lives in the box rather than in the input, so the number the
+   sponsor types is the number they see submitted. */
+.amount-input {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  padding-left: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+}
+.amount-input:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.12);
+}
+.amount-input > span {
+  font-size: 15px;
+  color: var(--ink-3);
+}
+.request-modal .amount-input input {
+  border: 0;
+  background: none;
+  padding-left: 2px;
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  font-weight: 600;
+}
+.request-modal .amount-input input:focus {
+  border: 0;
+  box-shadow: none;
+}
+.amount-preset {
+  flex: none;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.amount-preset:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* --- Fund the whole trip -------------------------------------------------- */
+
+.underwrite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 18px;
+  padding: 24px 28px;
+  border-radius: 18px;
+  border: 1px dashed var(--hairline);
+}
+.underwrite h3 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.underwrite p {
+  margin-top: 6px;
+  max-width: 52ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
 .success-note {
   margin-top: 12px;
   font-size: 13px !important;
@@ -1645,6 +1726,17 @@ details p {
   }
   .tier-options {
     grid-template-columns: 1fr;
+  }
+  .amount-row {
+    flex-direction: column;
+  }
+  .amount-preset {
+    padding: 10px 14px;
+  }
+  .underwrite {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 22px;
   }
   .disclosure-card {
     padding: 30px 24px;

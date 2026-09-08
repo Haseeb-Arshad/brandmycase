@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PLACEMENTS } from "@/data/placements";
-import { TIER_IDS } from "@/data/sponsorship";
+import { TIERS, TIER_IDS } from "@/data/sponsorship";
 
 /**
  * Request schemas.
@@ -18,6 +18,11 @@ import { TIER_IDS } from "@/data/sponsorship";
 
 const placementIds = PLACEMENTS.map((p) => p.id) as [string, ...string[]];
 const tierIds = TIER_IDS as [string, ...string[]];
+
+/** tier id -> price, so the schema can reject an offer below what a tier costs. */
+const TIER_PRICES: Record<string, number> = Object.fromEntries(
+  TIERS.map((tier) => [tier.id, tier.priceUsd]),
+);
 
 /** Optional free text: blank strings become `undefined` rather than "". */
 const optionalText = (max: number, message?: string) =>
@@ -58,10 +63,35 @@ const optionalUrl = (max = 200) =>
     .optional()
     .transform((value) => (value ? value : undefined));
 
-export const sponsorshipInquirySchema = z.object({
+/**
+ * An amount a company offers, in whole dollars.
+ *
+ * Accepts what a person actually types — "1,500", " 750 ", 500 — and refuses
+ * anything that is not a plain positive whole number of dollars. Cents are
+ * rejected rather than rounded: an invoice for $250.50 helps nobody.
+ */
+const offeredAmount = z
+  .union([z.number(), z.string()])
+  .transform((value) =>
+    typeof value === "number" ? value : Number(value.replace(/[$,\s]/g, "")),
+  )
+  .refine((value) => Number.isFinite(value), "Enter an amount in whole dollars.")
+  .refine((value) => Number.isInteger(value), "Whole dollars only, no cents.")
+  .refine((value) => value > 0, "Enter an amount greater than zero.")
+  .refine((value) => value <= 1_000_000, "Get in touch directly for an amount that size.")
+  .optional();
+
+export const sponsorshipInquirySchema = z
+  .object({
   tier: z.enum(tierIds, {
     errorMap: () => ({ message: "Choose a sponsorship tier." }),
   }),
+  /**
+   * What the company offers, if they want to give more than the tier price.
+   * Blank means "the tier price". It is never treated as money received — see
+   * the migration comment on `proposed_amount_usd`.
+   */
+  proposedAmountUsd: offeredAmount,
   /** A tier can be sponsored without naming a panel. */
   placementId: z
     .union([z.literal(""), z.enum(placementIds)])
@@ -115,7 +145,26 @@ export const sponsorshipInquirySchema = z.object({
     .max(0, "Rejected.")
     .optional()
     .transform(() => undefined),
-});
+  })
+  /**
+   * You may offer more than a tier costs. You may not offer less.
+   *
+   * The tier decides which panel you get, so an amount below its price is
+   * either a misunderstanding or an attempt to buy the medallion for $50.
+   * Checked here rather than in the database because this is the one place
+   * that knows what a tier costs.
+   */
+  .superRefine((value, ctx) => {
+    const price = TIER_PRICES[value.tier];
+    if (price === undefined || value.proposedAmountUsd === undefined) return;
+    if (value.proposedAmountUsd < price) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["proposedAmountUsd"],
+        message: `That tier is $${price.toLocaleString("en-US")}. Enter that or more.`,
+      });
+    }
+  });
 
 export type SponsorshipInquiryInput = z.infer<typeof sponsorshipInquirySchema>;
 

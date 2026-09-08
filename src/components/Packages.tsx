@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useCampaign } from "@/components/CampaignProvider";
-import { formatUsd } from "@/data/sponsorship";
+import { CAMPAIGN_GOAL_USD, formatUsd } from "@/data/sponsorship";
 import { track } from "@/lib/analytics";
 
 /**
@@ -17,6 +17,9 @@ import { track } from "@/lib/analytics";
  */
 export function Packages() {
   const { tiers, openSponsorForm } = useCampaign();
+  // The "fund the whole trip" button opens the top tier, since somebody
+  // covering the campaign should be offered the best placement on the case.
+  const anchor = tiers[0];
 
   useEffect(() => {
     track("view_package", { tiers: tiers.length });
@@ -34,8 +37,9 @@ export function Packages() {
             {/* Deliberately does not use the word "auction", even to deny one.
                 A cold-email visitor has never heard of the previous version of
                 this site, and denying a thing introduces it. */}
-            Fixed prices, invoiced properly, no negotiation theatre. Pick a tier —
-            you can choose the exact panel on the case afterwards.
+            Fixed starting prices, invoiced properly, no negotiation theatre. Pick a
+            tier — you can choose the exact panel on the case afterwards, and give
+            more than the tier price if you want to.
           </p>
         </div>
 
@@ -78,6 +82,32 @@ export function Packages() {
               </article>
             );
           })}
+        </div>
+
+        {/* The prices above are floors, not ceilings. Somebody who wants to do
+            more should not have to email to ask whether they can. */}
+        <div className="underwrite">
+          <div>
+            <h3>Want to do more?</h3>
+            <p>
+              Every tier is a starting price — you can name a higher amount on the
+              form. Or cover the trip outright and be the reason it happened.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="pill-dark"
+            onClick={() => {
+              track("click_sponsor", { source: "underwrite", tier: anchor.id });
+              openSponsorForm({
+                tier: anchor.id,
+                amountUsd: CAMPAIGN_GOAL_USD,
+                source: "underwrite",
+              });
+            }}
+          >
+            Fund the whole trip · {formatUsd(CAMPAIGN_GOAL_USD)}
+          </button>
         </div>
 
         <p className="fine-print">

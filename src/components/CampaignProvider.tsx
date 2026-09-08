@@ -37,6 +37,8 @@ import { SponsorshipModal } from "@/components/SponsorshipModal";
 export interface SponsorFormRequest {
   tier?: TierId | null;
   placement?: PlacementState | null;
+  /** Pre-fill the offer, e.g. "fund the whole trip". Still editable. */
+  amountUsd?: number | null;
   /** Where the click came from. Analytics only; never stored. */
   source: string;
 }
@@ -73,6 +75,7 @@ export function useOptionalCampaign(): CampaignContextValue | null {
 interface OpenState {
   tier: TierId | null;
   placement: PlacementState | null;
+  amountUsd: number | null;
 }
 
 export function CampaignProvider({
@@ -105,7 +108,11 @@ export function CampaignProvider({
       ...(request.placement ? { panel: request.placement.id } : {}),
     });
 
-    setOpen({ tier, placement: request.placement ?? null });
+    setOpen({
+      tier,
+      placement: request.placement ?? null,
+      amountUsd: request.amountUsd ?? null,
+    });
   }, []);
 
   const close = useCallback(() => {
@@ -135,6 +142,7 @@ export function CampaignProvider({
           placements={board.placements}
           initialTier={open.tier}
           initialPlacement={open.placement}
+          initialAmount={open.amountUsd}
           onClose={close}
         />
       )}

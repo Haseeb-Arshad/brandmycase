@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { PlacementState, TierAvailability } from "@/lib/placement-board";
 import { FACE_LABELS } from "@/data/placements";
-import { formatUsd, type TierId } from "@/data/sponsorship";
+import { CAMPAIGN_GOAL_USD, TIER_BY_ID, formatUsd, type TierId } from "@/data/sponsorship";
 import { CONTACT_EMAIL } from "@/data/site";
 import { track } from "@/lib/analytics";
 
@@ -34,6 +34,8 @@ interface SponsorshipModalProps {
   placements: PlacementState[];
   initialTier: TierId | null;
   initialPlacement: PlacementState | null;
+  /** Pre-filled offer, e.g. from the "fund the whole trip" button. */
+  initialAmount: number | null;
   onClose: () => void;
 }
 
@@ -68,10 +70,24 @@ export function SponsorshipModal({
   placements,
   initialTier,
   initialPlacement,
+  initialAmount,
   onClose,
 }: SponsorshipModalProps) {
   const [tier, setTier] = useState<TierId | null>(initialTier);
   const [placement, setPlacement] = useState<PlacementState | null>(initialPlacement);
+  /**
+   * The offer, as a string so typing feels normal. It starts at the tier price
+   * and can be raised, never lowered below it — the tier is what decides which
+   * panel you get, so "the Anchor placement for $50" is not an offer, it is a
+   * misunderstanding. The server enforces the same rule.
+   */
+  const [amount, setAmount] = useState<string>(() => {
+    const start =
+      initialAmount ??
+      (initialTier ? TIER_BY_ID[initialTier]?.priceUsd : undefined) ??
+      initialPlacement?.priceUsd;
+    return start ? String(start) : "";
+  });
   const [form, setForm] = useState<FormState>(EMPTY);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -98,9 +114,25 @@ export function SponsorshipModal({
     );
   }, [placements, tier, initialPlacement]);
 
+  /** The offer as a number, or null while the field is empty or nonsense. */
+  const offer = useMemo(() => {
+    const n = Number(amount.replace(/[$,\s]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [amount]);
+
+  const tierPrice = selectedTier?.priceUsd ?? 0;
+  const givingExtra = offer !== null && tierPrice > 0 && offer > tierPrice;
+
   const chooseTier = (next: TierId) => {
     setTier(next);
     setPlacement((current) => (current && current.tier === next ? current : null));
+    // Move the offer to the new tier's price — unless they have deliberately
+    // typed something bigger, which is not a number to overwrite.
+    const price = TIER_BY_ID[next].priceUsd;
+    setAmount((current) => {
+      const n = Number(current.replace(/[$,\s]/g, ""));
+      return Number.isFinite(n) && n > price ? current : String(price);
+    });
   };
 
   const onKeyDown = useCallback(
@@ -180,6 +212,7 @@ export function SponsorshipModal({
         body: JSON.stringify({
           tier,
           placementId: placement?.id,
+          proposedAmountUsd: amount.trim() ? amount.trim() : undefined,
           company: form.company,
           contactName: form.contactName,
           contactEmail: form.contactEmail,
@@ -205,6 +238,7 @@ export function SponsorshipModal({
       track("submit_sponsor_interest", {
         tier,
         ...(placement ? { panel: placement.id } : {}),
+        ...(offer !== null ? { amount: offer, above_tier: givingExtra } : {}),
       });
       setDone(true);
     } catch {
@@ -336,6 +370,53 @@ export function SponsorshipModal({
                   </p>
                 )}
               </fieldset>
+
+              {/* The amount is a field, not a fixed price, because a company
+                  that wants to give more should not have to email to ask. It
+                  cannot go below the tier price — that is what buys the panel. */}
+              {tier && (
+                <div className="field">
+                  <label htmlFor={fieldId("proposedAmountUsd")}>Your sponsorship</label>
+                  <div className="amount-row">
+                    <div className="amount-input">
+                      <span aria-hidden="true">$</span>
+                      <input
+                        id={fieldId("proposedAmountUsd")}
+                        value={amount}
+                        onChange={(event) => setAmount(event.target.value)}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        aria-invalid={fields.proposedAmountUsd ? true : undefined}
+                        aria-describedby={
+                          fields.proposedAmountUsd
+                            ? errorId("proposedAmountUsd")
+                            : fieldId("amount-help")
+                        }
+                      />
+                    </div>
+                    {CAMPAIGN_GOAL_USD > tierPrice && (
+                      <button
+                        type="button"
+                        className="amount-preset"
+                        onClick={() => setAmount(String(CAMPAIGN_GOAL_USD))}
+                      >
+                        Fund the whole trip · {formatUsd(CAMPAIGN_GOAL_USD)}
+                      </button>
+                    )}
+                  </div>
+                  {fields.proposedAmountUsd ? (
+                    <p className="field-error" id={errorId("proposedAmountUsd")}>
+                      {fields.proposedAmountUsd}
+                    </p>
+                  ) : (
+                    <p className="field-help" id={fieldId("amount-help")}>
+                      {givingExtra
+                        ? `${formatUsd(tierPrice)} covers the ${selectedTier?.label} placement — thank you for the rest. I'll tell you exactly what it pays for.`
+                        : `The ${selectedTier?.label} placement is ${formatUsd(tierPrice)}. Put more here if you'd like to.`}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {tier && (
                 <div className="field">
@@ -536,8 +617,8 @@ export function SponsorshipModal({
               <button className="submit" type="submit" disabled={submitting}>
                 {submitting
                   ? "Sending…"
-                  : selectedTier
-                    ? `Sponsor at ${formatUsd(selectedTier.priceUsd)}`
+                  : offer !== null
+                    ? `Sponsor at ${formatUsd(offer)}`
                     : "Send sponsorship inquiry"}
               </button>
             </form>
