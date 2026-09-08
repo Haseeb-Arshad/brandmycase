@@ -10,3 +10,15 @@ prisma/dev.db
 prisma/dev.db-journal
 .DS_Store
 coverage/
+
+# Sponsor prospecting output. THIS REPOSITORY IS PUBLIC.
+#
+# These files hold third-party personal data — named people, job titles,
+# LinkedIn profiles and business email addresses — plus the sales pipeline
+# itself. Committing them publishes all of it and hands the prospect list to
+# anyone who clones the repo. Keep them local; back them up somewhere private.
+devday_sponsor_prospects.csv
+devday_sponsorship_report.md
+research_progress.json
+sources.csv
+scripts/build-devday-sponsors.mjs
